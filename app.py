@@ -1,10 +1,7 @@
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request, redirect
+from flask import Flask, jsonify, request
 import random
 import string
-import urllib.request
-import urllib.parse
-import json
 
 app = Flask(__name__)
 
@@ -17,9 +14,7 @@ keys_db = {
     }
 }
 
-TOKEN_LINK4M = "67d2f1b7f42a7c6c275420ab"
-
-# --- TRANG CHỦ: ĐIỀU HƯỚNG CHUYÊN NGHIỆP ---
+# --- TRANG CHỦ: TẠO LINK QUA CORS PROXY TRÊN TRÌNH DUYỆT ---
 @app.route('/')
 def index():
     return """
@@ -28,7 +23,7 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>GA Gaming - Professional Key System</title>
+        <title>GA Gaming - Ultimate Key System</title>
         <style>
             :root {
                 --bg: #0d0e15;
@@ -89,38 +84,48 @@ def index():
             #status {
                 margin-top: 15px;
                 font-size: 13px;
-                color: #00ffcc;
+                color: var(--accent);
+                font-weight: bold;
             }
         </style>
     </head>
     <body>
         <div class="card">
             <h1>🛡️ GA GAMING SYSTEM</h1>
-            <p>Xác thực và nhận key bản quyền 24h qua Link4M an toàn.</p>
-            <button onclick="requestKey()" class="btn" id="actionBtn">⚡ LẤY KEY NGAY</button>
+            <p>Vượt link Link4M tự động để nhận key bản quyền 24h.</p>
+            <button onclick="getLink4M()" class="btn" id="actionBtn">⚡ LẤY KEY QUA LINK4M</button>
             <div id="status"></div>
         </div>
 
         <script>
-            async function requestKey() {
+            async function getLink4M() {
                 const btn = document.getElementById('actionBtn');
                 const status = document.getElementById('status');
                 btn.disabled = true;
-                status.innerText = "Đang khởi tạo phiên làm việc...";
+                status.innerText = "⏳ Đang kết nối đến Link4M...";
+
+                const token = "67d2f1b7f42a7c6c275420ab";
+                const targetUrl = encodeURIComponent("https://gagaming-key-system.onrender.com/claim-key");
+                const apiUrl = "https://link4m.com/api?api=" + token + "&url=" + targetUrl;
+                
+                // Dùng CORS Proxy để trình duyệt gọi thẳng lấy JSON chuẩn của Link4M, né mọi lỗi chặn mạng
+                const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(apiUrl);
 
                 try {
-                    const response = await fetch('/api/get-link4m');
+                    const response = await fetch(proxyUrl);
                     const data = await response.json();
                     
-                    if (data.status === 'success' && data.url) {
-                        status.innerText = "Đang chuyển hướng...";
-                        window.location.href = data.url;
+                    if (data.status === 'success' && data.shortenedUrl) {
+                        status.innerText = "🚀 Đang chuyển hướng sang Link4M...";
+                        window.location.href = data.shortenedUrl;
                     } else {
-                        status.innerText = "Lỗi: " + (data.message || "Không thể tạo liên kết.");
+                        status.style.color = "#ff4d4d";
+                        status.innerText = "❌ Lỗi: " + (data.message || "Không thể tạo link rút gọn!");
                         btn.disabled = false;
                     }
                 } catch (err) {
-                    status.innerText = "Lỗi kết nối máy chủ!";
+                    status.style.color = "#ff4d4d";
+                    status.innerText = "❌ Lỗi kết nối! Vui lòng thử lại.";
                     btn.disabled = false;
                 }
             }
@@ -128,26 +133,6 @@ def index():
     </body>
     </html>
     """
-
-# --- API TRUNG GIAN GỌI LINK4M AN TOÀN (NÉ HOÀN TOÀN CORS) ---
-@app.route('/api/get-link4m')
-def get_link4m():
-    domain_site = "https://gagaming-key-system.onrender.com"
-    target_url = f"{domain_site}/claim-key"
-    api_url = f"https://link4m.com/api?api={TOKEN_LINK4M}&url={urllib.parse.quote(target_url)}"
-
-    try:
-        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
-            if res_data.get('status') == 'success' and res_data.get('shortenedUrl'):
-                return jsonify({'status': 'success', 'url': res_data.get('shortenedUrl')})
-    except Exception as e:
-        print(f"API Error: {e}")
-
-    # Fallback dự phòng thông minh nếu API chính gặp sự cố
-    fallback_url = f"https://link4m.com/st?api={TOKEN_LINK4M}&url={urllib.parse.quote(target_url)}"
-    return jsonify({'status': 'success', 'url': fallback_url})
 
 # --- TRANG NHẬN KEY VÀ SAO CHÉP 1 CHẠM ---
 @app.route('/claim-key')
