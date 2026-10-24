@@ -1,7 +1,9 @@
 from flask import Flask, redirect, request
 import random
 import string
+import urllib.request
 import urllib.parse
+import json
 
 app = Flask(__name__)
 
@@ -30,11 +32,23 @@ def index():
 @app.route('/get-key')
 def get_key():
     target_url = "https://gagaming-key-system.onrender.com/claim-key"
-    token = "67d2f1b7f42a7c6c275420ab"  # Token Link4M của ông[span_1](start_span)[span_1](end_span)
+    token = "67d2f1b7f42a7c6c275420ab"  # Token Link4M của ông
     
-    # Sử dụng chuẩn đường dẫn chuyển hướng trực tiếp của Link4M, KHÔNG gọi mạng ngầm -> Tuyệt đối không bao giờ lỗi 500
-    link4m_redirect_url = f"https://link4m.com/st?api={token}&url={urllib.parse.quote(target_url)}"
-    return redirect(link4m_redirect_url)
+    # Quay lại gọi đúng chuẩn API JSON của Link4M
+    api_url = f"https://link4m.com/api?api={token}&url={urllib.parse.quote(target_url)}"
+    
+    try:
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            # Nếu API trả về link rút gọn thành công thì chuyển hướng sang đó
+            if res_data.get('status') == 'success' and res_data.get('shortenedUrl'):
+                return redirect(res_data.get('shortenedUrl'))
+    except Exception as e:
+        print(f"Lỗi gọi API: {e}")
+
+    # Nếu có lỗi xảy ra, chuyển hướng trực tiếp về trang nhận key luôn để không bị kẹt
+    return redirect(target_url)
 
 @app.route('/claim-key')
 def claim_key():
