@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, redirect, request, session, url_for
+from flask import Flask, jsonify, redirect, request
 import random
 import string
+import urllib.request
+import urllib.parse
+import json
 
 app = Flask(__name__)
 app.secret_key = 'key_system_secure_v1'
@@ -29,7 +32,7 @@ def index():
     </head>
     <body>
         <h1>🔑 HỆ THỐNG KEY GÀ GAMING</h1>
-        <p>Bấm vào nút bên dưới để chuyển qua link vượt lấy key bản quyền 24h.</p>
+        <p>Bấm vào nút bên dưới để vượt link lấy key bản quyền 24h.</p>
         <a href="/get-key" class="btn">LẤY KEY QUA VƯỢT LINK 4M</a>
     </body>
     </html>
@@ -37,17 +40,25 @@ def index():
 
 @app.route('/get-key')
 def get_key():
-    # Cấu hình trực tiếp đường dẫn vượt link Link4M của ông ở đây
-    # (Ông có thể thay thế bằng link rút gọn Link4M thực tế của ông trỏ về trang /claim-key)
     domain_site = "https://gagaming-key-system.onrender.com"
     target_callback_url = f"{domain_site}/claim-key"
-    
-    # Tạo sẵn cấu trúc chuyển hướng an toàn tuyệt đối qua Link4M hoặc link trực tiếp
-    # Nếu dùng API token mà bị lỗi mạng Render, ta cho chuyển thẳng tới URL định sẵn hoặc link vượt
     api_token_4m = "67d2f114875f8e29865d1fa9"
-    link4m_redirect = f"https://link4m.com/api?api={api_token_4m}&url={target_callback_url}"
     
-    return redirect(link4m_redirect)
+    # Gọi API Link4M để lấy link rút gọn chuẩn chỉnh
+    api_4m_url = f"https://link4m.com/api?api={api_token_4m}&url={urllib.parse.quote(target_callback_url)}"
+    
+    try:
+        req = urllib.request.Request(api_4m_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            if res_data.get('status') == 'success' and res_data.get('shortenedUrl'):
+                # Lấy đúng link rút gọn từ API trả về và chuyển hướng người dùng sang đó
+                return redirect(res_data.get('shortenedUrl'))
+    except Exception as e:
+        print(f"Lỗi gọi API Link4M: {e}")
+
+    # Nếu có lỗi mạng hoặc lỗi API, tạm thời trỏ về trang callback để không bị kẹt
+    return redirect(target_callback_url)
 
 @app.route('/claim-key')
 def claim_key():
