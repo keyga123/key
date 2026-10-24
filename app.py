@@ -1,14 +1,44 @@
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 import random
 import string
+import urllib.request
+import urllib.parse
+import json
 
 app = Flask(__name__)
 
-# Database lưu trữ Key dạng: { "KEY": { "expiry": timestamp, "hwid": "ID_THIET_BI" } }
+# Database lưu trữ Key và HWID
 keys_db = {}
 
-# --- TRANG NHẬN KEY VÀ SAO CHÉP 1 CHẠM (Nằm trên Render) ---
+TOKEN_LINK4M = "67d2f1b7f42a7c6c275420ab"
+
+# --- TRANG CHỦ RENDER: NHẬN REQUEST TỪ BLOGGER VÀ GỌI API LINK4M SERVER-SIDE ---
+@app.route('/')
+def index():
+    # URL đích sau khi người dùng vượt link xong sẽ quay về trang nhận key
+    target_url = "https://gagaming-key-system.onrender.com/claim-key"
+    
+    # Endpoint API chính thức chuẩn của Link4M
+    api_url = f"https://link4m.com/api?api={TOKEN_LINK4M}&url={urllib.parse.quote(target_url)}"
+
+    try:
+        # Python gọi ngầm sang Link4M (Né hoàn toàn CORS và lỗi trình duyệt)
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            
+            # Lấy link rút gọn chuẩn từ JSON trả về của Link4M
+            short_url = res_data.get('shortenedUrl') or res_data.get('url')
+            if res_data.get('status') == 'success' and short_url:
+                return redirect(short_url)
+    except Exception as e:
+        print(f"Lỗi gọi API Link4M: {e}")
+
+    # Fallback dự phòng: Nếu gọi API lỗi thì trỏ thẳng về trang nhận key để không bị kẹt
+    return redirect('/claim-key')
+
+# --- TRANG NHẬN KEY VÀ SAO CHÉP 1 CHẠM ---
 @app.route('/claim-key')
 def claim_key():
     p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -16,11 +46,9 @@ def claim_key():
     new_key = f"GA-{p1}-{p2}"
     
     expiry_time = datetime.now().timestamp() + (24 * 3600)
-    
-    # Khởi tạo key mới với hwid = None (chưa bị trói buộc với thiết bị nào)
     keys_db[new_key] = {
         "expiry": expiry_time,
-        "hwid": None, 
+        "hwid": None,
         "created_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     }
 
@@ -128,7 +156,7 @@ def claim_key():
 def api_check_key():
     data = request.json or request.form
     key = data.get('key', '').strip()
-    hwid = data.get('hwid', '').strip()  # Nhận mã định danh thiết bị từ script Lua gửi lên
+    hwid = data.get('hwid', '').strip()
     now_ts = datetime.now().timestamp()
     
     if not key or not hwid:
@@ -141,12 +169,9 @@ def api_check_key():
     if now_ts > key_info['expiry']:
         return jsonify({'success': False, 'message': 'Key đã hết hạn sử dụng!'})
         
-    # Kiểm tra cơ chế khóa thiết bị
     if key_info['hwid'] is None:
-        # Lần đầu sử dụng: Trói buộc key này chết với thiết bị hiện tại
         key_info['hwid'] = hwid
     elif key_info['hwid'] != hwid:
-        # Nếu thiết bị khác mang key này đi nhập: Từ chối ngay lập tức
         return jsonify({'success': False, 'message': 'Key này đã được sử dụng trên thiết bị khác!'})
         
     return jsonify({
