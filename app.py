@@ -1,198 +1,280 @@
-from datetime import datetime, timedelta
-from flask import Flask, jsonify, request
-import random
-import string
+
+import os
+import secrets
+import sqlite3
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
+
+import requests
+from flask import Flask, jsonify, request, render_template_string
 
 app = Flask(__name__)
 
-# Database lưu trữ Key
-keys_db = {
-    "GA-GAMING-VIP-2026": {
-        "expiry": (datetime.now() + timedelta(days=30)).timestamp(),
-        "ip": "all",
-        "created_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    }
+DATABASE = os.environ.get("DATABASE_PATH", "keys.db")
+LINK4M_API_KEY = os.environ.get("LINK4M_API_KEY", "").strip()
+
+
+def now_utc():
+    return datetime.now(timezone.utc)
+
+
+def connect_db():
+    conn = sqlite3.connect(DATABASE, timeout=15)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with connect_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS keys (
+                key TEXT PRIMARY KEY,
+                expiry TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+
+
+init_db()
+
+
+HOME = """
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GA GAMING VIP</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;min-height:100vh;padding:20px;
+ display:flex;align-items:center;justify-content:center;
+ background:#0b0c10;color:white;
+ font-family:Arial,sans-serif
 }
+.card{
+ width:100%;max-width:480px;padding:36px 24px;
+ background:#1f2833;border:2px solid #66fcf1;
+ border-radius:28px;text-align:center;
+ box-shadow:0 15px 40px #0008
+}
+h1{color:#66fcf1;font-size:27px}
+p{color:#c5c6c7;line-height:1.6}
+button,.btn{
+ display:block;width:100%;padding:17px 12px;
+ background:linear-gradient(45deg,#66fcf1,#45f3ff);
+ border:0;border-radius:14px;color:#0b0c10;
+ font-size:17px;font-weight:bold;text-decoration:none;
+ cursor:pointer
+}
+button:disabled{opacity:.6}
+#message{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main class="card">
+<h1>🔑 GA GAMING VIP</h1>
+<p>Hệ thống lấy key GA GAMING VIP thời hạn 24 giờ.</p>
+<button id="btn" onclick="getLink()">⚡ LẤY KEY QUA LINK4M</button>
+<p id="message" role="status" aria-live="polite"></p>
+</main>
+<script>
+async function getLink(){
+ const btn=document.getElementById('btn');
+ const msg=document.getElementById('message');
+ btn.disabled=true;
+ msg.style.color='#66fcf1';
+ msg.textContent='Đang tạo link...';
+ try{
+   const res=await fetch('/create-link',{method:'POST'});
+   const data=await res.json();
+   if(!res.ok || !data.success) throw Error(data.message||'Có lỗi xảy ra');
+   const url=new URL(data.url);
+   if(url.protocol!=='https:') throw Error('URL không an toàn');
+   location.href=url.href;
+ }catch(e){
+   msg.style.color='#ff007f';
+   msg.textContent='Lỗi: '+e.message;
+   btn.disabled=false;
+ }
+}
+</script>
+</body>
+</html>
+"""
 
-@app.route('/')
+
+@app.get("/")
 def index():
-    return """
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>GA Gaming - Key System</title>
-        <style>
-            :root {
-                --bg-color: #0b0c10;
-                --card-bg: #1f2833;
-                --primary: #66fcf1;
-                --text-main: #ffffff;
-                --text-sub: #c5c6c7;
-            }
-            body {
-                background-color: var(--bg-color);
-                color: var(--text-main);
-                font-family: 'Poppins', sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-            }
-            .container {
-                background: var(--card-bg);
-                border: 2px solid var(--primary);
-                padding: 40px 30px;
-                border-radius: 24px;
-                text-align: center;
-                max-width: 420px;
-                width: 90%;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-            }
-            h1 {
-                font-size: 24px;
-                background: linear-gradient(to right, #66fcf1, #45f3ff, #ff007f);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                margin-bottom: 12px;
-            }
-            p {
-                color: var(--text-sub);
-                font-size: 14px;
-                margin-bottom: 30px;
-            }
-            .btn {
-                background: linear-gradient(45deg, #66fcf1, #45f3ff);
-                color: #0b0c10;
-                padding: 16px 20px;
-                text-decoration: none;
-                font-weight: bold;
-                border-radius: 14px;
-                display: block;
-                width: 100%;
-                box-sizing: border-box;
-                cursor: pointer;
-                border: none;
-                font-size: 16px;
-                transition: transform 0.2s, box-shadow 0.2s;
-                box-shadow: 0 5px 15px rgba(102, 252, 241, 0.4);
-            }
-            .btn:hover {
-                transform: translateY(-3px);
-                box-shadow: 0 8px 25px rgba(102, 252, 241, 0.6);
-            }
-            #loading {
-                margin-top: 15px;
-                color: #66fcf1;
-                font-size: 13px;
-                font-weight: bold;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🔑 GA GAMING VIP</h1>
-            <p>Hệ thống tự động hóa vượt link Link4M cấp bản quyền 24h.</p>
-            <button onclick="takeKey()" class="btn">⚡ LẤY KEY QUA LINK4M</button>
-            <div id="loading"></div>
-        </div>
+    return render_template_string(HOME)
 
-        <script>
-            async function takeKey() {
-                const loadText = document.getElementById('loading');
-                loadText.innerText = "⚡ Đang tạo link vượt qua Link4M...";
-                
-                const token = "67d2f1b7f42a7c6c275420ab";
-                const targetUrl = encodeURIComponent("https://gagaming-key-system.onrender.com/claim-key");
-                const link4mApi = `https://link4m.com/api?api=${token}&url=${targetUrl}`;
-                
-                // Sử dụng CORS Proxy để né hoàn toàn mọi lỗi chặn mạng và lỗi CORS trên trình duyệt
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(link4mApi)}`;
 
-                try {
-                    const res = await fetch(proxyUrl);
-                    const data = await res.json();
-                    if (data.status === 'success' && data.shortenedUrl) {
-                        window.location.href = data.shortenedUrl;
-                    } else {
-                        loadText.style.color = "#ff007f";
-                        loadText.innerText = "Lỗi từ Link4M: " + (data.message || "Không thể tạo link!");
-                    }
-                } catch (e) {
-                    loadText.style.color = "#ff007f";
-                    loadText.innerText = "Lỗi kết nối hệ thống! Vui lòng thử lại.";
-                }
-            }
-        </script>
-    </body>
-    </html>
-    """
+@app.post("/create-link")
+def create_link():
+    if not LINK4M_API_KEY:
+        return jsonify(
+            success=False,
+            message="Chưa cấu hình LINK4M_API_KEY trên Render."
+        ), 500
 
-@app.route('/claim-key')
+    target = request.url_root.rstrip("/") + "/claim-key"
+
+    try:
+        response = requests.get(
+            "https://link4m.com/api",
+            params={"api": LINK4M_API_KEY, "url": target},
+            timeout=15
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        short_url = (
+            data.get("shortenedUrl")
+            or data.get("shortened_url")
+        )
+
+        if data.get("status") != "success" or not short_url:
+            app.logger.warning("Link4M response: %s", data)
+            return jsonify(
+                success=False,
+                message="Link4M không tạo được link. Kiểm tra API key và định dạng API."
+            ), 502
+
+        parsed = urlparse(short_url)
+        if parsed.scheme != "https" or not parsed.netloc:
+            return jsonify(
+                success=False,
+                message="Link4M trả về URL không hợp lệ."
+            ), 502
+
+        return jsonify(success=True, url=short_url)
+
+    except requests.RequestException:
+        app.logger.exception("Link4M request failed")
+        return jsonify(
+            success=False,
+            message="Không kết nối được Link4M. Kiểm tra Render Logs."
+        ), 502
+    except (ValueError, AttributeError):
+        app.logger.exception("Invalid Link4M response")
+        return jsonify(
+            success=False,
+            message="Phản hồi API Link4M không hợp lệ."
+        ), 502
+
+
+@app.get("/claim-key")
 def claim_key():
-    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
-    p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    p2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
-    new_key = f"GA-{p1}-{p2}"
-    
-    expiry_time = datetime.now().timestamp() + (24 * 3600)
-    keys_db[new_key] = {
-        "expiry": expiry_time,
-        "ip": user_ip,
-        "created_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    }
+    # Đây là trang cấp key mẫu; chưa xác minh hoàn thành Link4M.
+    # Không dùng làm xác thực bản quyền thực tế cho tới khi tích hợp
+    # callback/token xác nhận hợp lệ từ nhà cung cấp.
+    new_key = "GA-" + secrets.token_hex(4).upper()
 
-    return f"""
+    expiry = now_utc() + timedelta(hours=24)
+
+    try:
+        with connect_db() as conn:
+            conn.execute(
+                "INSERT INTO keys (key, expiry, created_at) VALUES (?, ?, ?)",
+                (
+                    new_key,
+                    expiry.isoformat(),
+                    now_utc().isoformat()
+                )
+            )
+    except sqlite3.Error:
+        app.logger.exception("Database write failed")
+        return "Không lưu được key. Vui lòng thử lại sau.", 500
+
+    return render_template_string("""
     <!DOCTYPE html>
     <html lang="vi">
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Nhận Key Thành Công</title>
-        <style>
-            body {{ background: #0b0c10; color: white; font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-            .box {{ background: #1f2833; border: 2px solid #66fcf1; padding: 40px 30px; border-radius: 24px; text-align: center; max-width: 450px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }}
-            h1 {{ color: #66fcf1; font-size: 24px; margin-bottom: 12px; }}
-            p {{ color: #c5c6c7; font-size: 14px; margin-bottom: 20px; }}
-            .key-box {{ background: #0b0c10; border: 1px dashed #66fcf1; padding: 18px; border-radius: 12px; color: #66fcf1; font-size: 22px; font-weight: bold; word-break: break-all; margin-bottom: 25px; box-shadow: inset 0 0 10px rgba(102, 252, 241, 0.2); }}
-            .btn {{ background: #ff007f; color: white; padding: 14px 22px; text-decoration: none; font-weight: bold; border-radius: 12px; display: inline-block; transition: 0.2s; box-shadow: 0 5px 15px rgba(255, 0, 127, 0.4); }}
-            .btn:hover {{ opacity: 0.9; transform: translateY(-2px); }}
-        </style>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>GA GAMING - Key</title>
+      <style>
+      body{background:#0b0c10;color:white;font-family:Arial;
+      min-height:100vh;display:flex;align-items:center;
+      justify-content:center;margin:0;padding:16px}
+      .card{background:#1f2833;border:2px solid #66fcf1;
+      border-radius:24px;padding:30px 20px;text-align:center;
+      width:100%;max-width:440px}
+      h2,.key{color:#66fcf1}
+      .key{padding:16px;background:#0b0c10;
+      overflow-wrap:anywhere;font-weight:bold;font-size:22px}
+      a,button{display:inline-block;margin-top:20px;padding:13px;
+      border:0;border-radius:10px;background:#66fcf1;
+      color:#0b0c10;font-weight:bold;text-decoration:none}
+      </style>
     </head>
-    <body>
-        <div class="box">
-            <h1>🎉 VƯỢT LINK THÀNH CÔNG!</h1>
-            <p>Mã key bản quyền 24h của bạn:</p>
-            <div class="key-box">{new_key}</div>
-            <a href="/" class="btn">← Quay Về Trang Chủ</a>
-        </div>
-    </body>
-    </html>
-    """
+    <body><main class="card">
+      <h2>🎉 KEY ĐÃ ĐƯỢC TẠO</h2>
+      <p>Key có thời hạn 24 giờ kể từ khi tạo.</p>
+      <div class="key" id="key">{{ key }}</div>
+      <button onclick="copyKey()">SAO CHÉP KEY</button>
+      <p id="status"></p>
+      <a href="/">Quay về trang chủ</a>
+      <script>
+      async function copyKey(){
+        try{
+          await navigator.clipboard.writeText(
+            document.getElementById('key').textContent
+          );
+          document.getElementById('status').textContent='Đã sao chép!';
+        }catch(e){
+          document.getElementById('status').textContent=
+            'Hãy nhấn giữ key để sao chép.';
+        }
+      }
+      </script>
+    </main></body></html>
+    """, key=new_key)
 
-@app.route('/api/check-key', methods=['POST'])
+
+@app.post("/api/check-key")
 def api_check_key():
-    data = request.json or request.form
-    key = data.get('key', '').strip()
-    now_ts = datetime.now().timestamp()
-    
-    if not key:
-        return jsonify({'success': False, 'message': 'Thiếu tham số key!'})
-        
-    key_info = keys_db.get(key)
-    if not key_info:
-        return jsonify({'success': False, 'message': 'Key không tồn tại!'})
-        
-    if now_ts > key_info['expiry']:
-        return jsonify({'success': False, 'message': 'Key đã hết hạn sử dụng!'})
-        
-    return jsonify({
-        'success': True, 
-        'message': 'Key hợp lệ!', 
-        'expires_at': datetime.fromtimestamp(key_info['expiry']).strftime('%Y-%m-%d %H:%M:%S')
-    })
+    data = request.get_json(silent=True) or request.form
+    key = str(data.get("key", "")).strip()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    if not key:
+        return jsonify(success=False, message="Thiếu key."), 400
+
+    try:
+        with connect_db() as conn:
+            record = conn.execute(
+                "SELECT key, expiry FROM keys WHERE key = ?",
+                (key,)
+            ).fetchone()
+    except sqlite3.Error:
+        app.logger.exception("Database read failed")
+        return jsonify(success=False, message="Lỗi cơ sở dữ liệu."), 500
+
+    if record is None:
+        return jsonify(
+            success=False,
+            message="Key không tồn tại."
+        ), 404
+
+    expiry = datetime.fromisoformat(record["expiry"])
+
+    if now_utc() >= expiry:
+        return jsonify(
+            success=False,
+            message="Key đã hết hạn."
+        ), 403
+
+    return jsonify(
+        success=True,
+        message="Key hợp lệ.",
+        expires_at=expiry.isoformat()
+    )
+
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=False
+    )
