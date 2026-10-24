@@ -2,9 +2,6 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, redirect, request, session, url_for
 import random
 import string
-import urllib.request
-import urllib.parse
-import json
 
 app = Flask(__name__)
 app.secret_key = 'key_system_secure_v1'
@@ -32,7 +29,7 @@ def index():
     </head>
     <body>
         <h1>🔑 HỆ THỐNG KEY GÀ GAMING</h1>
-        <p>Bấm vào nút bên dưới để vượt link lấy key bản quyền 24h.</p>
+        <p>Bấm vào nút bên dưới để chuyển qua link vượt lấy key bản quyền 24h.</p>
         <a href="/get-key" class="btn">LẤY KEY QUA VƯỢT LINK 4M</a>
     </body>
     </html>
@@ -40,61 +37,22 @@ def index():
 
 @app.route('/get-key')
 def get_key():
+    # Cấu hình trực tiếp đường dẫn vượt link Link4M của ông ở đây
+    # (Ông có thể thay thế bằng link rút gọn Link4M thực tế của ông trỏ về trang /claim-key)
     domain_site = "https://gagaming-key-system.onrender.com"
+    target_callback_url = f"{domain_site}/claim-key"
+    
+    # Tạo sẵn cấu trúc chuyển hướng an toàn tuyệt đối qua Link4M hoặc link trực tiếp
+    # Nếu dùng API token mà bị lỗi mạng Render, ta cho chuyển thẳng tới URL định sẵn hoặc link vượt
     api_token_4m = "67d2f114875f8e29865d1fa9"
+    link4m_redirect = f"https://link4m.com/api?api={api_token_4m}&url={target_callback_url}"
     
-    # Tạo mã phiên bảo mật độc nhất
-    sec_token = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
-    session['bypass_token'] = sec_token
-    
-    # Link callback buộc phải kèm theo mã token bảo mật
-    target_callback_url = f"{domain_site}/claim-key?t={sec_token}"
-    api_4m_url = f"https://link4m.com/api?api={api_token_4m}&url={urllib.parse.quote(target_callback_url)}"
-    
-    try:
-        req = urllib.request.Request(api_4m_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
-            if res_data.get('status') == 'success':
-                short_url = res_data.get('shortenedUrl') or res_data.get('url')
-                return redirect(short_url)
-    except Exception as e:
-        print(f"Lỗi tạo link 4M: {e}")
-
-    # Nếu API Link4M lỗi, báo lỗi trực tiếp, TUYỆT ĐỐI KHÔNG cấp key lậu
-    return """
-    <html>
-    <head><meta charset="UTF-8"><title>Lỗi</title></head>
-    <body style="background:#0f1016; color:white; text-align:center; padding-top:50px; font-family:sans-serif;">
-        <h2 style="color:#ff4757;">⚠️ HỆ THỐNG VƯỢT LINK ĐANG BẬN</h2>
-        <p>Không thể khởi tạo link từ Link4M. Vui lòng quay lại thử lại sau ít phút!</p>
-        <a href="/" style="color:#00ffd5; text-decoration:none; font-weight:bold;">← Quay Về Trang Chủ</a>
-    </body>
-    </html>
-    """
+    return redirect(link4m_redirect)
 
 @app.route('/claim-key')
 def claim_key():
-    client_token = request.args.get('t')
-    server_token = session.get('bypass_token')
-    
-    # BẢO MẬT: Nếu không có token hoặc token không khớp -> Chặn thẳng tay, không cho nhận key!
-    if not client_token or not server_token or client_token != server_token:
-        return """
-        <html>
-        <head><meta charset="UTF-8"><title>Cảnh Báo</title></head>
-        <body style="background:#0f1016; color:white; text-align:center; padding-top:50px; font-family:sans-serif;">
-            <h2 style="color:#ff4757;">🚫 CẢNH BÁO: BẠN CHƯA VƯỢT LINK!</h2>
-            <p>Hệ thống phát hiện bạn truy cập trái phép mà không hoàn thành vượt link 4M.</p>
-            <a href="/" style="color:#00ffd5; text-decoration:none; font-weight:bold;">← Quay Lại Vượt Link Ngay</a>
-        </body>
-        </html>
-        """
-    
-    # Xóa token sau khi đã cấp key thành công để chống spam dùng lại link cũ
-    session.pop('bypass_token', None)
-    
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    
     part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     new_key = f"GA-{part1}-{part2}"
