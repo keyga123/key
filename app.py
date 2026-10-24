@@ -22,15 +22,15 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>GA Gaming - Key System</title>
+        <title>GA Gaming - Ultimate Key System</title>
         <style>
             :root {
-                --bg-color: #0f1016;
-                --card-bg: #181a25;
-                --primary: #ff4757;
-                --success: #2ed573;
+                --bg-color: #0b0c10;
+                --card-bg: #1f2833;
+                --primary: #66fcf1;
+                --success: #45f3ff;
                 --text-main: #ffffff;
-                --text-sub: #a4b0be;
+                --text-sub: #c5c6c7;
             }
             body {
                 background-color: var(--bg-color);
@@ -45,47 +45,48 @@ def index():
             .container {
                 background: var(--card-bg);
                 border: 2px solid var(--primary);
-                padding: 35px 25px;
-                border-radius: 20px;
+                padding: 40px 30px;
+                border-radius: 24px;
                 text-align: center;
-                max-width: 400px;
+                max-width: 420px;
                 width: 90%;
-                box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+                box-shadow: 0 20px 40px rgba(0,0,0,0.8);
             }
             h1 {
-                font-size: 24px;
-                background: linear-gradient(to right, #ff4757, #ffa502, #2ed573);
+                font-size: 26px;
+                background: linear-gradient(to right, #66fcf1, #45f3ff, #ff007f);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
-                margin-bottom: 10px;
+                margin-bottom: 12px;
             }
             p {
                 color: var(--text-sub);
                 font-size: 14px;
-                margin-bottom: 25px;
+                margin-bottom: 30px;
             }
             .btn {
-                background: linear-gradient(45deg, #ff0000, #ff7300, #00ffd5);
-                color: white;
-                padding: 14px 20px;
+                background: linear-gradient(45deg, #66fcf1, #45f3ff);
+                color: #0b0c10;
+                padding: 16px 20px;
                 text-decoration: none;
                 font-weight: bold;
-                border-radius: 12px;
+                border-radius: 14px;
                 display: block;
                 width: 100%;
                 box-sizing: border-box;
                 cursor: pointer;
                 border: none;
                 font-size: 16px;
-                transition: transform 0.2s, opacity 0.2s;
+                transition: transform 0.2s, box-shadow 0.2s;
+                box-shadow: 0 5px 15px rgba(102, 252, 241, 0.4);
             }
             .btn:hover {
-                transform: translateY(-2px);
-                opacity: 0.95;
+                transform: translateY(-3px);
+                box-shadow: 0 8px 25px rgba(102, 252, 241, 0.6);
             }
             #loading {
-                margin-top: 15px;
-                color: #ffa502;
+                margin-top: 20px;
+                color: #66fcf1;
                 font-size: 13px;
                 font-weight: bold;
             }
@@ -93,18 +94,16 @@ def index():
     </head>
     <body>
         <div class="container">
-            <h1>🔑 GA GAMING KEY</h1>
-            <p>Hệ thống bắt buộc phải vượt link Link4M để nhận key bản quyền 24h.</p>
-            <button onclick="getLink4M()" class="btn">🚀 LẤY KEY QUA LINK4M</button>
+            <h1>🚀 GA GAMING VIP</h1>
+            <p>Hệ thống tự động hóa vượt link Link4M cấp bản quyền 24h siêu tốc.</p>
+            <button onclick="getLink4M()" class="btn">⚡ LẤY KEY NGAY LẬP TỨC</button>
             <div id="loading"></div>
         </div>
 
-        <!-- JAVASCRIPT GỌI API LẤY LINK CHUẨN XÁC TỪ LINK4M -->
         <script>
             async function getLink4M() {
                 const loadText = document.getElementById('loading');
-                loadText.style.color = "#ffa502";
-                loadText.innerText = "Đang khởi tạo link từ Link4M...";
+                loadText.innerText = "⚡ Đang thiết lập kết nối tối ưu với Link4M...";
                 
                 const token = "67d2f1b7f42a7c6c275420ab";
                 const targetUrl = encodeURIComponent("https://gagaming-key-system.onrender.com/claim-key");
@@ -115,15 +114,12 @@ def index():
                     const data = await response.json();
                     
                     if (data.status === 'success' && data.shortenedUrl) {
-                        // Nhảy thẳng sang link rút gọn chuẩn do Link4M tự tạo
                         window.location.href = data.shortenedUrl;
                     } else {
-                        loadText.style.color = "#ff4757";
-                        loadText.innerText = "Lỗi API Link4M: " + (data.message || "Không thể tạo link!");
+                        window.location.href = `https://link4m.com/st?api=${token}&url=${targetUrl}`;
                     }
                 } catch (err) {
-                    loadText.style.color = "#ff4757";
-                    loadText.innerText = "Lỗi kết nối tới Link4M! Hãy thử lại.";
+                    window.location.href = `https://link4m.com/st?api=${token}&url=${targetUrl}`;
                 }
             }
         </script>
@@ -153,19 +149,19 @@ def claim_key():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Nhận Key Thành Công</title>
         <style>
-            body {{ background: #0f1016; color: white; font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
-            .box {{ background: #181a25; border: 2px solid #2ed573; padding: 35px 25px; border-radius: 20px; text-align: center; max-width: 450px; width: 90%; box-shadow: 0 15px 35px rgba(0,0,0,0.6); }}
-            h1 {{ color: #2ed573; font-size: 22px; margin-bottom: 10px; }}
-            p {{ color: #a4b0be; font-size: 14px; margin-bottom: 20px; }}
-            .key-box {{ background: #12131c; border: 1px dashed #2ed573; padding: 15px; border-radius: 10px; color: #2ed573; font-size: 20px; font-weight: bold; word-break: break-all; margin-bottom: 20px; }}
-            .btn {{ background: #ff4757; color: white; padding: 12px 20px; text-decoration: none; font-weight: bold; border-radius: 10px; display: inline-block; transition: 0.2s; }}
-            .btn:hover {{ opacity: 0.9; }}
+            body {{ background: #0b0c10; color: white; font-family: 'Poppins', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }}
+            .box {{ background: #1f2833; border: 2px solid #66fcf1; padding: 40px 30px; border-radius: 24px; text-align: center; max-width: 450px; width: 90%; box-shadow: 0 20px 40px rgba(0,0,0,0.8); }}
+            h1 {{ color: #66fcf1; font-size: 24px; margin-bottom: 12px; }}
+            p {{ color: #c5c6c7; font-size: 14px; margin-bottom: 20px; }}
+            .key-box {{ background: #0b0c10; border: 1px dashed #66fcf1; padding: 18px; border-radius: 12px; color: #66fcf1; font-size: 22px; font-weight: bold; word-break: break-all; margin-bottom: 25px; box-shadow: inset 0 0 10px rgba(102, 252, 241, 0.2); }}
+            .btn {{ background: #ff007f; color: white; padding: 14px 22px; text-decoration: none; font-weight: bold; border-radius: 12px; display: inline-block; transition: 0.2s; box-shadow: 0 5px 15px rgba(255, 0, 127, 0.4); }}
+            .btn:hover {{ opacity: 0.9; transform: translateY(-2px); }}
         </style>
     </head>
     <body>
         <div class="box">
             <h1>🎉 VƯỢT LINK THÀNH CÔNG!</h1>
-            <p>Mã key bản quyền 24h của bạn:</p>
+            <p>Mã key bản quyền 24h tối thượng của bạn:</p>
             <div class="key-box">{new_key}</div>
             <a href="/" class="btn">← Quay Về Trang Chủ</a>
         </div>
