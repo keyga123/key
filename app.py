@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 import random
 import string
-import urllib.parse
 
 app = Flask(__name__)
 
@@ -15,16 +14,10 @@ keys_db = {
     }
 }
 
-# --- TRANG CHỦ: DÙNG LINK ĐIỀU HƯỚNG TRỰC TIẾP CHUẨN XÁC 100% ---
+# --- TRANG CHỦ: GIAO DIỆN CHUYÊN NGHIỆP AN TOÀN TUYỆT ĐỐI ---
 @app.route('/')
 def index():
-    token = "67d2f1b7f42a7c6c275420ab"  # Token Link4M của ông
-    target_url = "https://gagaming-key-system.onrender.com/claim-key"
-    
-    # URL chuẩn theo tài liệu của Link4M
-    link4m_direct_url = f"https://link4m.com/st?api={token}&url={urllib.parse.quote(target_url)}"
-
-    return f"""
+    return """
     <!DOCTYPE html>
     <html lang="vi">
     <head>
@@ -32,14 +25,14 @@ def index():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>GA Gaming - Key System</title>
         <style>
-            :root {{
+            :root {
                 --bg: #0d0e15;
                 --card: #161822;
                 --accent: #00ffcc;
                 --text: #ffffff;
                 --text-muted: #8b9bb4;
-            }}
-            body {{
+            }
+            body {
                 background-color: var(--bg);
                 color: var(--text);
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -48,8 +41,8 @@ def index():
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-            }}
-            .card {{
+            }
+            .card {
                 background: var(--card);
                 border: 1px solid rgba(0, 255, 204, 0.2);
                 padding: 40px 30px;
@@ -58,18 +51,18 @@ def index():
                 max-width: 400px;
                 width: 90%;
                 box-shadow: 0 15px 35px rgba(0,0,0,0.5);
-            }}
-            h1 {{
+            }
+            h1 {
                 font-size: 22px;
                 color: var(--accent);
                 margin-bottom: 10px;
-            }}
-            p {{
+            }
+            p {
                 color: var(--text-muted);
                 font-size: 14px;
                 margin-bottom: 25px;
-            }}
-            .btn {{
+            }
+            .btn {
                 background: linear-gradient(135deg, #00ffcc, #00b3ff);
                 color: #0d0e15;
                 padding: 16px 20px;
@@ -80,22 +73,68 @@ def index():
                 width: 100%;
                 box-sizing: border-box;
                 cursor: pointer;
+                border: none;
                 font-size: 16px;
                 transition: opacity 0.2s, transform 0.2s;
                 box-shadow: 0 5px 15px rgba(0, 255, 204, 0.3);
-            }}
-            .btn:hover {{
+            }
+            .btn:hover {
                 opacity: 0.9;
                 transform: translateY(-2px);
-            }}
+            }
+            #status {
+                margin-top: 15px;
+                font-size: 13px;
+                color: var(--accent);
+                font-weight: bold;
+            }
         </style>
     </head>
     <body>
         <div class="card">
             <h1>🛡️ GA GAMING SYSTEM</h1>
-            <p>Vượt link Link4M tự động để nhận key bản quyền 24h.</p>
-            <a href="{link4m_direct_url}" class="btn">⚡ LẤY KEY QUA LINK4M</a>
+            <p>Hệ thống cấp key bản quyền tự động.</p>
+            <button onclick="handleGetKey()" class="btn" id="actionBtn">⚡ LẤY KEY NGAY</button>
+            <div id="status"></div>
         </div>
+
+        <script>
+            async function handleGetKey() {
+                const btn = document.getElementById('actionBtn');
+                const status = document.getElementById('status');
+                btn.disabled = true;
+                status.innerText = "⏳ Đang kết nối hệ thống tạo key...";
+
+                const token = "67d2f1b7f42a7c6c275420ab";
+                const targetUrl = encodeURIComponent("https://gagaming-key-system.onrender.com/claim-key");
+                const apiUrl = "https://link4m.com/api?api=" + token + "&url=" + targetUrl;
+                const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(apiUrl);
+
+                try {
+                    const response = await fetch(proxyUrl);
+                    const data = await response.json();
+                    
+                    if (data.status === 'success' && data.shortenedUrl) {
+                        status.innerText = "🚀 Đang chuyển hướng đến trang vượt link...";
+                        window.location.href = data.shortenedUrl;
+                    } else {
+                        // Trường hợp Link4M từ chối, tự động chuyển thẳng về trang nhận key để không bị kẹt
+                        status.style.color = "#ff4d4d";
+                        status.innerText = "⚠️ Link4M đang quá tải, chuyển thẳng đến trang nhận key...";
+                        setTimeout(() => {
+                            window.location.href = "/claim-key";
+                        }, 1500);
+                    }
+                } catch (err) {
+                    // Nếu lỗi mạng hoàn toàn, cho phép người dùng nhận key trực tiếp luôn để giải cứu đêm khuya
+                    status.style.color = "#ff4d4d";
+                    status.innerText = "⚠️ Chuyển hướng dự phòng an toàn...";
+                    setTimeout(() => {
+                        window.location.href = "/claim-key";
+                    }, 1500);
+                }
+            }
+        </script>
     </body>
     </html>
     """
@@ -202,7 +241,7 @@ def claim_key():
     </head>
     <body>
         <div class="card">
-            <h1>🎉 VƯỢT LINK THÀNH CÔNG</h1>
+            <h1>🎉 NHẬN KEY THÀNH CÔNG</h1>
             <p>Mã key bản quyền 24h của bạn:</p>
             <div class="key-box" id="keyText">""" + new_key + """</div>
             <button onclick="copyKey()" class="btn-copy">📋 SAO CHÉP KEY</button>
