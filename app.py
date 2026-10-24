@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, redirect
 import random
 import string
+import urllib.request
 import urllib.parse
+import json
 
 app = Flask(__name__)
 
@@ -15,95 +17,139 @@ keys_db = {
     }
 }
 
-# --- TRANG 1: TRANG CHỦ (Điều hướng thẳng bằng cấu trúc chuẩn Link4M) ---
+TOKEN_LINK4M = "67d2f1b7f42a7c6c275420ab"
+
+# --- TRANG CHỦ: ĐIỀU HƯỚNG CHUYÊN NGHIỆP ---
 @app.route('/')
 def index():
-    token = "67d2f1b7f42a7c6c275420ab"  # Token Link4M của ông
-    target_url = "https://gagaming-key-system.onrender.com/claim-key"
-    
-    # Sử dụng chuẩn cấu trúc định hướng trực tiếp của Link4M
-    link4m_url = f"https://link4m.com/st?api={token}&url={urllib.parse.quote(target_url)}"
-
-    return f"""
+    return """
     <!DOCTYPE html>
     <html lang="vi">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>GA Gaming - Key System</title>
+        <title>GA Gaming - Professional Key System</title>
         <style>
-            :root {{
-                --bg-color: #0b0c10;
-                --card-bg: #1f2833;
-                --primary: #66fcf1;
-                --text-main: #ffffff;
-                --text-sub: #c5c6c7;
-            }}
-            body {{
-                background-color: var(--bg-color);
-                color: var(--text-main);
-                font-family: 'Poppins', sans-serif;
+            :root {
+                --bg: #0d0e15;
+                --card: #161822;
+                --accent: #00ffcc;
+                --text: #ffffff;
+                --text-muted: #8b9bb4;
+            }
+            body {
+                background-color: var(--bg);
+                color: var(--text);
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-            }}
-            .container {{
-                background: var(--card-bg);
-                border: 2px solid var(--primary);
+            }
+            .card {
+                background: var(--card);
+                border: 1px solid rgba(0, 255, 204, 0.2);
                 padding: 40px 30px;
-                border-radius: 24px;
+                border-radius: 20px;
                 text-align: center;
-                max-width: 420px;
+                max-width: 400px;
                 width: 90%;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-            }}
-            h1 {{
-                font-size: 24px;
-                background: linear-gradient(to right, #66fcf1, #45f3ff, #ff007f);
-                -webkit-background-clip: text;
-                -webkit-text-fill-color: transparent;
-                margin-bottom: 12px;
-            }}
-            p {{
-                color: var(--text-sub);
+                box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+            }
+            h1 {
+                font-size: 22px;
+                color: var(--accent);
+                margin-bottom: 10px;
+            }
+            p {
+                color: var(--text-muted);
                 font-size: 14px;
-                margin-bottom: 30px;
-            }}
-            .btn {{
-                background: linear-gradient(45deg, #66fcf1, #45f3ff);
-                color: #0b0c10;
-                padding: 16px 20px;
+                margin-bottom: 25px;
+            }
+            .btn {
+                background: linear-gradient(135deg, #00ffcc, #00b3ff);
+                color: #0d0e15;
+                padding: 14px 20px;
                 text-decoration: none;
                 font-weight: bold;
-                border-radius: 14px;
+                border-radius: 10px;
                 display: block;
                 width: 100%;
                 box-sizing: border-box;
                 cursor: pointer;
                 border: none;
                 font-size: 16px;
-                transition: transform 0.2s, box-shadow 0.2s;
-                box-shadow: 0 5px 15px rgba(102, 252, 241, 0.4);
-            }}
-            .btn:hover {{
-                transform: translateY(-3px);
-                box-shadow: 0 8px 25px rgba(102, 252, 241, 0.6);
-            }}
+                transition: opacity 0.2s, transform 0.2s;
+            }
+            .btn:hover {
+                opacity: 0.9;
+                transform: translateY(-2px);
+            }
+            #status {
+                margin-top: 15px;
+                font-size: 13px;
+                color: #00ffcc;
+            }
         </style>
     </head>
     <body>
-        <div class="container">
-            <h1>🔑 GA GAMING VIP</h1>
-            <p>Hoàn thành vượt link Link4M để nhận key bản quyền 24h.</p>
-            <a href="{link4m_url}" class="btn">⚡ LẤY KEY QUA LINK4M</a>
+        <div class="card">
+            <h1>🛡️ GA GAMING SYSTEM</h1>
+            <p>Xác thực và nhận key bản quyền 24h qua Link4M an toàn.</p>
+            <button onclick="requestKey()" class="btn" id="actionBtn">⚡ LẤY KEY NGAY</button>
+            <div id="status"></div>
         </div>
+
+        <script>
+            async function requestKey() {
+                const btn = document.getElementById('actionBtn');
+                const status = document.getElementById('status');
+                btn.disabled = true;
+                status.innerText = "Đang khởi tạo phiên làm việc...";
+
+                try {
+                    const response = await fetch('/api/get-link4m');
+                    const data = await response.json();
+                    
+                    if (data.status === 'success' && data.url) {
+                        status.innerText = "Đang chuyển hướng...";
+                        window.location.href = data.url;
+                    } else {
+                        status.innerText = "Lỗi: " + (data.message || "Không thể tạo liên kết.");
+                        btn.disabled = false;
+                    }
+                } catch (err) {
+                    status.innerText = "Lỗi kết nối máy chủ!";
+                    btn.disabled = false;
+                }
+            }
+        </script>
     </body>
     </html>
     """
 
-# --- TRANG 2: TRANG NHẬN VÀ COPY KEY ---
+# --- API TRUNG GIAN GỌI LINK4M AN TOÀN (NÉ HOÀN TOÀN CORS) ---
+@app.route('/api/get-link4m')
+def get_link4m():
+    domain_site = "https://gagaming-key-system.onrender.com"
+    target_url = f"{domain_site}/claim-key"
+    api_url = f"https://link4m.com/api?api={TOKEN_LINK4M}&url={urllib.parse.quote(target_url)}"
+
+    try:
+        req = urllib.request.Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            if res_data.get('status') == 'success' and res_data.get('shortenedUrl'):
+                return jsonify({'status': 'success', 'url': res_data.get('shortenedUrl')})
+    except Exception as e:
+        print(f"API Error: {e}")
+
+    # Fallback dự phòng thông minh nếu API chính gặp sự cố
+    fallback_url = f"https://link4m.com/st?api={TOKEN_LINK4M}&url={urllib.parse.quote(target_url)}"
+    return jsonify({'status': 'success', 'url': fallback_url})
+
+# --- TRANG NHẬN KEY VÀ SAO CHÉP 1 CHẠM ---
 @app.route('/claim-key')
 def claim_key():
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -118,118 +164,111 @@ def claim_key():
         "created_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     }
 
-    html_content = f"""
+    html_content = """
     <!DOCTYPE html>
     <html lang="vi">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Nhận Key Thành Công</title>
+        <title>Thành Công - GA Gaming</title>
         <style>
-            body {{
-                background-color: #0b0c10;
+            body {
+                background-color: #0d0e15;
                 color: white;
-                font-family: 'Poppins', sans-serif;
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-            }}
-            .box {{
-                background: #1f2833;
-                border: 2px solid #66fcf1;
+            }
+            .card {
+                background: #161822;
+                border: 1px solid rgba(0, 255, 204, 0.2);
                 padding: 40px 30px;
-                border-radius: 24px;
+                border-radius: 20px;
                 text-align: center;
-                max-width: 450px;
+                max-width: 400px;
                 width: 90%;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-            }}
-            h1 {{
-                color: #66fcf1;
+                box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+            }
+            h1 {
                 font-size: 22px;
-                margin-bottom: 12px;
-            }}
-            p {{
-                color: #c5c6c7;
+                color: #00ffcc;
+                margin-bottom: 10px;
+            }
+            p {
+                color: #8b9bb4;
                 font-size: 14px;
                 margin-bottom: 20px;
-            }}
-            .key-box {{
-                background: #0b0c10;
-                border: 1px dashed #66fcf1;
-                padding: 16px;
-                border-radius: 12px;
-                color: #66fcf1;
+            }
+            .key-box {
+                background: #0d0e15;
+                border: 1px dashed #00ffcc;
+                padding: 15px;
+                border-radius: 10px;
+                color: #00ffcc;
                 font-size: 20px;
                 font-weight: bold;
                 word-break: break-all;
                 margin-bottom: 20px;
-                box-shadow: inset 0 0 10px rgba(102, 252, 241, 0.2);
-            }}
-            .btn-copy {{
-                background: #66fcf1;
-                color: #0b0c10;
+            }
+            .btn-copy {
+                background: #00ffcc;
+                color: #0d0e15;
                 padding: 14px 20px;
                 font-weight: bold;
-                border-radius: 12px;
+                border-radius: 10px;
                 border: none;
                 width: 100%;
                 cursor: pointer;
                 font-size: 16px;
                 margin-bottom: 12px;
                 transition: 0.2s;
-                box-shadow: 0 5px 15px rgba(102, 252, 241, 0.4);
-            }}
-            .btn-copy:hover {{
+            }
+            .btn-copy:hover {
                 opacity: 0.9;
                 transform: translateY(-2px);
-            }}
-            .btn-home {{
-                background: #ff007f;
-                color: white;
-                padding: 12px 20px;
+            }
+            .btn-home {
+                background: transparent;
+                color: #8b9bb4;
+                padding: 10px;
                 text-decoration: none;
-                font-weight: bold;
-                border-radius: 12px;
+                font-size: 14px;
                 display: block;
-                transition: 0.2s;
-            }}
-            .btn-home:hover {{
-                opacity: 0.9;
-            }}
-            #toast {{
-                margin-top: 12px;
+            }
+            .btn-home:hover {
+                color: white;
+            }
+            #toast {
                 font-size: 13px;
-                color: #45f3ff;
-                font-weight: bold;
+                color: #00ffcc;
                 height: 15px;
-            }}
+                margin-bottom: 10px;
+            }
         </style>
     </head>
     <body>
-        <div class="box">
-            <h1>🎉 VƯỢT LINK THÀNH CÔNG!</h1>
+        <div class="card">
+            <h1>🎉 VƯỢT LINK THÀNH CÔNG</h1>
             <p>Mã key bản quyền 24h của bạn:</p>
-            <div class="key-box" id="keyText">""" + new_key + f"""</div>
+            <div class="key-box" id="keyText">""" + new_key + """</div>
             <button onclick="copyKey()" class="btn-copy">📋 SAO CHÉP KEY</button>
             <div id="toast"></div>
-            <a href="/" class="btn-home">← Quay Về Trang Chủ</a>
+            <a href="/" class="btn-home">← Quay lại trang chủ</a>
         </div>
 
         <script>
-            function copyKey() {{
-                const keyElement = document.getElementById('keyText').innerText;
-                navigator.clipboard.writeText(keyElement).then(() => {{
+            function copyKey() {
+                const text = document.getElementById('keyText').innerText;
+                navigator.clipboard.writeText(text).then(() => {
                     document.getElementById('toast').innerText = "Đã sao chép key vào bộ nhớ tạm!";
-                    setTimeout(() => {{
-                        document.getElementById('toast').innerText = "";
-                    }}, 3000);
-                }}).catch(err => {{
-                    alert("Không thể tự động copy, hãy bôi đen và copy thủ công nhé!");
-                }});
-            }}
+                    setTimeout(() => { document.getElementById('toast').innerText = ""; }, 3000);
+                }).catch(() => {
+                    alert("Không thể sao chép tự động, vui lòng copy thủ công!");
+                });
+            }
         </script>
     </body>
     </html>
