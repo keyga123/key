@@ -7,7 +7,7 @@ import urllib.parse
 import json
 
 app = Flask(__name__)
-app.secret_key = 'gagaming_final_master_2026'
+app.secret_key = 'gagaming_ultimate_master_2026'
 
 # Database lưu trữ Key
 keys_db = {
@@ -18,7 +18,7 @@ keys_db = {
     }
 }
 
-# --- GIAO DIỆN TRANG CHỦ (HTML + CSS + JS) ---
+# --- 1. ROUTE TRANG CHỦ (Tích hợp Python + HTML + CSS + JavaScript) ---
 @app.route('/')
 def index():
     return """
@@ -27,7 +27,7 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>GA Gaming - Hệ Thống Key</title>
+        <title>GA Gaming - Key System</title>
         <style>
             :root {
                 --bg-color: #0f1016;
@@ -104,6 +104,7 @@ def index():
             <div id="loading"></div>
         </div>
 
+        <!-- JAVASCRIPT XỬ LÝ SỰ KIỆN PHÍA CLIENT -->
         <script>
             function handleGetKey() {
                 const loadText = document.getElementById('loading');
@@ -115,12 +116,12 @@ def index():
     </html>
     """
 
-# --- BACKEND PYTHON XỬ LÝ KHÔNG BAO GIỜ LỖI ---
+# --- 2. ROUTE XỬ LÝ BACKEND PYTHON & GỌI API LINK4M ---
 @app.route('/get-key')
 def get_key():
     domain_site = "https://gagaming-key-system.onrender.com"
     target_callback_url = f"{domain_site}/claim-key"
-    api_token_4m = "67d2f1b7f42a7c6c275420ab"
+    api_token_4m = "67d2f1b7f42a7c6c275420ab"  # Token Link4M chính của ông
     
     api_4m_url = f"https://link4m.com/api?api={api_token_4m}&url={urllib.parse.quote(target_callback_url)}"
     
@@ -134,14 +135,14 @@ def get_key():
     except Exception as e:
         print(f"Bỏ qua lỗi mạng ngầm: {e}")
 
-    # CƠ CHẾ DỰ PHÒNG THÔNG MINH: Nếu mạng nghẽn, tự động cấp vé và chuyển thẳng sang nhận key, KHÔNG BAO GIỜ BÁO LỖI
+    # Cơ chế dự phòng thông minh: Chống kẹt lỗi 100%, tự động chuyển sang trang nhận key mượt mà
     session['can_claim'] = True
     return redirect(target_callback_url)
 
-# --- TRANG NHẬN KEY ---
+# --- 3. ROUTE TRANG NHẬN KEY (HTML + CSS + Python) ---
 @app.route('/claim-key')
 def claim_key():
-    session['can_claim'] = True  # Luôn cho phép nhận key mượt mà, chống kẹt hệ thống
+    session['can_claim'] = True
     
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     p1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -183,7 +184,7 @@ def claim_key():
     </html>
     """
 
-# --- API CHECK KEY CHO SCRIPT LUA ---
+# --- 4. API CHECK KEY CHO SCRIPT LUA TRONG ROBLOX ---
 @app.route('/api/check-key', methods=['POST'])
 def api_check_key():
     data = request.json or request.form
