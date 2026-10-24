@@ -1,4 +1,3 @@
-
 import os
 import secrets
 import sqlite3
@@ -10,8 +9,13 @@ from flask import Flask, jsonify, request, render_template_string
 
 app = Flask(__name__)
 
+# API key do người quản trị cung cấp.
+# Cảnh báo: không công khai file này lên GitHub hoặc nơi công cộng.
+LINK4M_API_KEY = "67d2f114875f8e29865d1fa9"
+
+# Render: nên gắn Persistent Disk và đặt DATABASE_PATH vào disk mount path
+# nếu muốn SQLite tồn tại qua lần deploy/restart.
 DATABASE = os.environ.get("DATABASE_PATH", "keys.db")
-LINK4M_API_KEY = os.environ.get("LINK4M_API_KEY", "").strip()
 
 
 def now_utc():
@@ -37,39 +41,37 @@ def init_db():
 
 init_db()
 
-
-HOME = """
+HOME = r"""
 <!DOCTYPE html>
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GA GAMING VIP</title>
+<meta name="theme-color" content="#0b0c10">
+<title>GA GAMING VIP - Key System</title>
 <style>
 *{box-sizing:border-box}
 body{
  margin:0;min-height:100vh;padding:20px;
  display:flex;align-items:center;justify-content:center;
- background:#0b0c10;color:white;
- font-family:Arial,sans-serif
+ background:#0b0c10;color:#fff;font-family:Arial,sans-serif
 }
 .card{
- width:100%;max-width:480px;padding:36px 24px;
+ width:100%;max-width:480px;padding:38px 24px;
  background:#1f2833;border:2px solid #66fcf1;
- border-radius:28px;text-align:center;
+ border-radius:30px;text-align:center;
  box-shadow:0 15px 40px #0008
 }
-h1{color:#66fcf1;font-size:27px}
+h1{color:#66fcf1;font-size:clamp(23px,6vw,30px)}
 p{color:#c5c6c7;line-height:1.6}
 button,.btn{
- display:block;width:100%;padding:17px 12px;
+ display:block;width:100%;padding:18px 12px;
  background:linear-gradient(45deg,#66fcf1,#45f3ff);
- border:0;border-radius:14px;color:#0b0c10;
- font-size:17px;font-weight:bold;text-decoration:none;
- cursor:pointer
+ border:0;border-radius:15px;color:#0b0c10;
+ font-size:17px;font-weight:bold;text-decoration:none;cursor:pointer
 }
-button:disabled{opacity:.6}
-#message{overflow-wrap:anywhere}
+button:disabled{opacity:.6;cursor:wait}
+#message{overflow-wrap:anywhere;min-height:24px}
 </style>
 </head>
 <body>
@@ -85,7 +87,7 @@ async function getLink(){
  const msg=document.getElementById('message');
  btn.disabled=true;
  msg.style.color='#66fcf1';
- msg.textContent='Đang tạo link...';
+ msg.textContent='Đang tạo link, vui lòng chờ...';
  try{
    const res=await fetch('/create-link',{method:'POST'});
    const data=await res.json();
@@ -115,30 +117,27 @@ def create_link():
     if not LINK4M_API_KEY:
         return jsonify(
             success=False,
-            message="Chưa cấu hình LINK4M_API_KEY trên Render."
+            message="Chưa cấu hình API key Link4M."
         ), 500
 
-    target = request.url_root.rstrip("/") + "/claim-key"
+    target_url = request.url_root.rstrip("/") + "/claim-key"
 
     try:
         response = requests.get(
             "https://link4m.com/api",
-            params={"api": LINK4M_API_KEY, "url": target},
+            params={"api": LINK4M_API_KEY, "url": target_url},
             timeout=15
         )
         response.raise_for_status()
         data = response.json()
 
-        short_url = (
-            data.get("shortenedUrl")
-            or data.get("shortened_url")
-        )
-
+        short_url = data.get("shortenedUrl") or data.get("shortened_url")
         if data.get("status") != "success" or not short_url:
-            app.logger.warning("Link4M response: %s", data)
+            # Không ghi API key vào log.
+            app.logger.warning("Link4M did not return a successful short URL")
             return jsonify(
                 success=False,
-                message="Link4M không tạo được link. Kiểm tra API key và định dạng API."
+                message="Link4M không tạo được link. Hãy kiểm tra API key và định dạng API."
             ), 502
 
         parsed = urlparse(short_url)
@@ -151,13 +150,13 @@ def create_link():
         return jsonify(success=True, url=short_url)
 
     except requests.RequestException:
-        app.logger.exception("Link4M request failed")
+        app.logger.exception("Yêu cầu tới Link4M thất bại")
         return jsonify(
             success=False,
-            message="Không kết nối được Link4M. Kiểm tra Render Logs."
+            message="Không kết nối được Link4M. Hãy kiểm tra Render Logs."
         ), 502
     except (ValueError, AttributeError):
-        app.logger.exception("Invalid Link4M response")
+        app.logger.exception("Phản hồi Link4M không hợp lệ")
         return jsonify(
             success=False,
             message="Phản hồi API Link4M không hợp lệ."
@@ -166,71 +165,71 @@ def create_link():
 
 @app.get("/claim-key")
 def claim_key():
-    # Đây là trang cấp key mẫu; chưa xác minh hoàn thành Link4M.
-    # Không dùng làm xác thực bản quyền thực tế cho tới khi tích hợp
-    # callback/token xác nhận hợp lệ từ nhà cung cấp.
+    # QUAN TRỌNG:
+    # Route này hiện tạo key khi được mở trực tiếp.
+    # Muốn bắt buộc hoàn thành Link4M, cần tích hợp cơ chế xác minh
+    # chính thức do Link4M cung cấp; chuyển hướng về URL này tự nó
+    # không chứng minh người dùng đã hoàn thành nhiệm vụ.
     new_key = "GA-" + secrets.token_hex(4).upper()
-
     expiry = now_utc() + timedelta(hours=24)
 
     try:
         with connect_db() as conn:
             conn.execute(
                 "INSERT INTO keys (key, expiry, created_at) VALUES (?, ?, ?)",
-                (
-                    new_key,
-                    expiry.isoformat(),
-                    now_utc().isoformat()
-                )
+                (new_key, expiry.isoformat(), now_utc().isoformat())
             )
     except sqlite3.Error:
-        app.logger.exception("Database write failed")
+        app.logger.exception("Không ghi được key vào cơ sở dữ liệu")
         return "Không lưu được key. Vui lòng thử lại sau.", 500
 
     return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="vi">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>GA GAMING - Key</title>
-      <style>
-      body{background:#0b0c10;color:white;font-family:Arial;
-      min-height:100vh;display:flex;align-items:center;
-      justify-content:center;margin:0;padding:16px}
-      .card{background:#1f2833;border:2px solid #66fcf1;
-      border-radius:24px;padding:30px 20px;text-align:center;
-      width:100%;max-width:440px}
-      h2,.key{color:#66fcf1}
-      .key{padding:16px;background:#0b0c10;
-      overflow-wrap:anywhere;font-weight:bold;font-size:22px}
-      a,button{display:inline-block;margin-top:20px;padding:13px;
-      border:0;border-radius:10px;background:#66fcf1;
-      color:#0b0c10;font-weight:bold;text-decoration:none}
-      </style>
-    </head>
-    <body><main class="card">
-      <h2>🎉 KEY ĐÃ ĐƯỢC TẠO</h2>
-      <p>Key có thời hạn 24 giờ kể từ khi tạo.</p>
-      <div class="key" id="key">{{ key }}</div>
-      <button onclick="copyKey()">SAO CHÉP KEY</button>
-      <p id="status"></p>
-      <a href="/">Quay về trang chủ</a>
-      <script>
-      async function copyKey(){
-        try{
-          await navigator.clipboard.writeText(
-            document.getElementById('key').textContent
-          );
-          document.getElementById('status').textContent='Đã sao chép!';
-        }catch(e){
-          document.getElementById('status').textContent=
-            'Hãy nhấn giữ key để sao chép.';
-        }
-      }
-      </script>
-    </main></body></html>
-    """, key=new_key)
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GA GAMING VIP - Key</title>
+<style>
+*{box-sizing:border-box}
+body{background:#0b0c10;color:#fff;font-family:Arial,sans-serif;
+min-height:100vh;display:flex;align-items:center;justify-content:center;
+margin:0;padding:16px}
+.card{background:#1f2833;border:2px solid #66fcf1;border-radius:24px;
+padding:30px 20px;text-align:center;width:100%;max-width:440px}
+h2,.key{color:#66fcf1}
+p{color:#c5c6c7;line-height:1.6}
+.key{padding:16px;background:#0b0c10;border:1px dashed #66fcf1;
+border-radius:12px;overflow-wrap:anywhere;font-weight:bold;font-size:22px}
+button,a{display:inline-block;margin-top:20px;padding:13px 18px;
+border:0;border-radius:10px;background:#66fcf1;color:#0b0c10;
+font-weight:bold;text-decoration:none;cursor:pointer}
+</style>
+</head>
+<body>
+<main class="card">
+<h2>🎉 KEY ĐÃ ĐƯỢC TẠO</h2>
+<p>Key có thời hạn 24 giờ kể từ lúc tạo.</p>
+<div class="key" id="key">{{ key }}</div>
+<button onclick="copyKey()">SAO CHÉP KEY</button>
+<p id="status" role="status"></p>
+<a href="/">Quay về trang chủ</a>
+<script>
+async function copyKey(){
+ const value=document.getElementById('key').textContent;
+ try{
+   await navigator.clipboard.writeText(value);
+   document.getElementById('status').textContent='Đã sao chép key!';
+ }catch(e){
+   document.getElementById('status').textContent=
+     'Trình duyệt không cho sao chép tự động. Hãy nhấn giữ key để sao chép.';
+ }
+}
+</script>
+</main>
+</body>
+</html>
+""", key=new_key)
 
 
 @app.post("/api/check-key")
@@ -248,22 +247,15 @@ def api_check_key():
                 (key,)
             ).fetchone()
     except sqlite3.Error:
-        app.logger.exception("Database read failed")
+        app.logger.exception("Không đọc được cơ sở dữ liệu")
         return jsonify(success=False, message="Lỗi cơ sở dữ liệu."), 500
 
     if record is None:
-        return jsonify(
-            success=False,
-            message="Key không tồn tại."
-        ), 404
+        return jsonify(success=False, message="Key không tồn tại."), 404
 
     expiry = datetime.fromisoformat(record["expiry"])
-
     if now_utc() >= expiry:
-        return jsonify(
-            success=False,
-            message="Key đã hết hạn."
-        ), 403
+        return jsonify(success=False, message="Key đã hết hạn."), 403
 
     return jsonify(
         success=True,
