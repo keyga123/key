@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from flask import Flask, jsonify, redirect, request
+from flask import Flask, jsonify, redirect, request, session, url_for
 import random
 import string
 import urllib.request
@@ -43,25 +43,58 @@ def get_key():
     domain_site = "https://gagaming-key-system.onrender.com"
     api_token_4m = "67d2f114875f8e29865d1fa9"
     
-    target_callback_url = f"{domain_site}/claim-key"
+    # Tạo mã phiên bảo mật độc nhất
+    sec_token = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+    session['bypass_token'] = sec_token
+    
+    # Link callback buộc phải kèm theo mã token bảo mật
+    target_callback_url = f"{domain_site}/claim-key?t={sec_token}"
     api_4m_url = f"https://link4m.com/api?api={api_token_4m}&url={urllib.parse.quote(target_callback_url)}"
     
-    bypass_link = target_callback_url
     try:
         req = urllib.request.Request(api_4m_url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=5) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             if res_data.get('status') == 'success':
-                bypass_link = res_data.get('shortenedUrl', target_callback_url)
+                short_url = res_data.get('shortenedUrl') or res_data.get('url')
+                return redirect(short_url)
     except Exception as e:
         print(f"Lỗi tạo link 4M: {e}")
 
-    return redirect(bypass_link)
+    # Nếu API Link4M lỗi, báo lỗi trực tiếp, TUYỆT ĐỐI KHÔNG cấp key lậu
+    return """
+    <html>
+    <head><meta charset="UTF-8"><title>Lỗi</title></head>
+    <body style="background:#0f1016; color:white; text-align:center; padding-top:50px; font-family:sans-serif;">
+        <h2 style="color:#ff4757;">⚠️ HỆ THỐNG VƯỢT LINK ĐANG BẬN</h2>
+        <p>Không thể khởi tạo link từ Link4M. Vui lòng quay lại thử lại sau ít phút!</p>
+        <a href="/" style="color:#00ffd5; text-decoration:none; font-weight:bold;">← Quay Về Trang Chủ</a>
+    </body>
+    </html>
+    """
 
 @app.route('/claim-key')
 def claim_key():
-    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+    client_token = request.args.get('t')
+    server_token = session.get('bypass_token')
     
+    # BẢO MẬT: Nếu không có token hoặc token không khớp -> Chặn thẳng tay, không cho nhận key!
+    if not client_token or not server_token or client_token != server_token:
+        return """
+        <html>
+        <head><meta charset="UTF-8"><title>Cảnh Báo</title></head>
+        <body style="background:#0f1016; color:white; text-align:center; padding-top:50px; font-family:sans-serif;">
+            <h2 style="color:#ff4757;">🚫 CẢNH BÁO: BẠN CHƯA VƯỢT LINK!</h2>
+            <p>Hệ thống phát hiện bạn truy cập trái phép mà không hoàn thành vượt link 4M.</p>
+            <a href="/" style="color:#00ffd5; text-decoration:none; font-weight:bold;">← Quay Lại Vượt Link Ngay</a>
+        </body>
+        </html>
+        """
+    
+    # Xóa token sau khi đã cấp key thành công để chống spam dùng lại link cũ
+    session.pop('bypass_token', None)
+    
+    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
     part1 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     part2 = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
     new_key = f"GA-{part1}-{part2}"
