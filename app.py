@@ -2,7 +2,6 @@ from datetime import datetime, timedelta
 from flask import Flask, jsonify, request
 import random
 import string
-import urllib.parse
 
 app = Flask(__name__)
 
@@ -15,16 +14,10 @@ keys_db = {
     }
 }
 
-# --- TRANG 1: TRANG CHỦ (Chuyên điều hướng qua Link4M) ---
+# --- TRANG 1: TRANG CHỦ (Điều hướng qua Link4M) ---
 @app.route('/')
 def index():
-    token = "67d2f1b7f42a7c6c275420ab"  # Token Link4M của ông
-    target_url = "https://gagaming-key-system.onrender.com/claim-key"
-    
-    # Link chuyển hướng trực tiếp chuẩn của Link4M
-    link4m_url = f"https://link4m.com/st?api={token}&url={urllib.parse.quote(target_url)}"
-
-    return f"""
+    return """
     <!DOCTYPE html>
     <html lang="vi">
     <head>
@@ -32,14 +25,14 @@ def index():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>GA Gaming - Key System</title>
         <style>
-            :root {{
+            :root {
                 --bg-color: #0b0c10;
                 --card-bg: #1f2833;
                 --primary: #66fcf1;
                 --text-main: #ffffff;
                 --text-sub: #c5c6c7;
-            }}
-            body {{
+            }
+            body {
                 background-color: var(--bg-color);
                 color: var(--text-main);
                 font-family: 'Poppins', sans-serif;
@@ -48,8 +41,8 @@ def index():
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-            }}
-            .container {{
+            }
+            .container {
                 background: var(--card-bg);
                 border: 2px solid var(--primary);
                 padding: 40px 30px;
@@ -58,20 +51,20 @@ def index():
                 max-width: 420px;
                 width: 90%;
                 box-shadow: 0 20px 40px rgba(0,0,0,0.8);
-            }}
-            h1 {{
+            }
+            h1 {
                 font-size: 24px;
                 background: linear-gradient(to right, #66fcf1, #45f3ff, #ff007f);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
                 margin-bottom: 12px;
-            }}
-            p {{
+            }
+            p {
                 color: var(--text-sub);
                 font-size: 14px;
                 margin-bottom: 30px;
-            }}
-            .btn {{
+            }
+            .btn {
                 background: linear-gradient(45deg, #66fcf1, #45f3ff);
                 color: #0b0c10;
                 padding: 16px 20px;
@@ -86,24 +79,31 @@ def index():
                 font-size: 16px;
                 transition: transform 0.2s, box-shadow 0.2s;
                 box-shadow: 0 5px 15px rgba(102, 252, 241, 0.4);
-            }}
-            .btn:hover {{
+            }
+            .btn:hover {
                 transform: translateY(-3px);
                 box-shadow: 0 8px 25px rgba(102, 252, 241, 0.6);
-            }}
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>🔑 GA GAMING VIP</h1>
             <p>Hoàn thành vượt link Link4M để nhận key bản quyền 24h.</p>
-            <a href="{link4m_url}" class="btn">⚡ LẤY KEY QUA LINK4M</a>
+            <button onclick="goToLink4M()" class="btn">⚡ LẤY KEY QUA LINK4M</button>
         </div>
+        <script>
+            function goToLink4M() {
+                const token = "67d2f1b7f42a7c6c275420ab";
+                const targetUrl = encodeURIComponent("https://gagaming-key-system.onrender.com/claim-key");
+                window.location.href = "https://link4m.com/st?api=" + token + "&url=" + targetUrl;
+            }
+        </script>
     </body>
     </html>
     """
 
-# --- TRANG 2: TRANG CUNG CẤP VÀ COPY KEY ---
+# --- TRANG 2: TRANG NHẬN VÀ COPY KEY ---
 @app.route('/claim-key')
 def claim_key():
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
@@ -118,7 +118,8 @@ def claim_key():
         "created_at": datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     }
 
-    return f"""
+    # Trả về HTML thuần, nhúng key an toàn bằng cú pháp định dạng chuỗi Python ngoài HTML
+    html_content = f"""
     <!DOCTYPE html>
     <html lang="vi">
     <head>
@@ -212,30 +213,31 @@ def claim_key():
         <div class="box">
             <h1>🎉 VƯỢT LINK THÀNH CÔNG!</h1>
             <p>Mã key bản quyền 24h của bạn:</p>
-            <div class="key-box" id="keyText">{new_key}</div>
+            <div class="key-box" id="keyText">""" + new_key + f"""</div>
             <button onclick="copyKey()" class="btn-copy">📋 SAO CHÉP KEY</button>
             <div id="toast"></div>
             <a href="/" class="btn-home">← Quay Về Trang Chủ</a>
         </div>
 
         <script>
-            function copyKey() {
+            function copyKey() {{
                 const keyElement = document.getElementById('keyText').innerText;
-                navigator.clipboard.writeText(keyElement).then(() => {
+                navigator.clipboard.writeText(keyElement).then(() => {{
                     document.getElementById('toast').innerText = "Đã sao chép key vào bộ nhớ tạm!";
                     setTimeout(() => {{
                         document.getElementById('toast').innerText = "";
                     }}, 3000);
-                }).catch(err => {{
+                }}).catch(err => {{
                     alert("Không thể tự động copy, hãy bôi đen và copy thủ công nhé!");
                 }});
-            }
+            }}
         </script>
     </body>
     </html>
     """
+    return html_content
 
-# --- API XÁC THỰC KEY TRONG GAME ROBLOX ---
+# --- API XÁC THỰC KEY TRONG GAME ---
 @app.route('/api/check-key', methods=['POST'])
 def api_check_key():
     data = request.json or request.form
