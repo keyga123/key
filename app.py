@@ -1,12 +1,13 @@
 from datetime import datetime
 from flask import Flask, flash, jsonify, redirect, render_template_string, request, session, url_for
+import requests
 import random
 import string
 
 app = Flask(__name__)
-app.secret_key = 'temp_permanent_gmail_secret_v1'
+app.secret_key = 'cloud_gmail_api_secret_v2'
 
-# --- DATABASE TẠM THỜI TRÊN RAM ---
+# --- DATABASE TÀI KHOẢN ---
 users_db = {
     'admin': {
         'password': '123',
@@ -24,8 +25,8 @@ users_db = {
     }
 }
 
-# Lưu danh sách email: mỗi email có thêm trường 'is_permanent' (True nếu vĩnh viễn/VIP, False nếu 10 phút) và 'created_at'
-inboxes_db = []
+# Lưu danh sách email thực tế do user tạo (liên kết với Cloud 1SecMail)
+cloud_inboxes = []
 
 BASE_HTML = """
 <!DOCTYPE html>
@@ -33,7 +34,7 @@ BASE_HTML = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Gmail Ảo - 10 Phút & Vĩnh Viễn VIP</title>
+    <title>Cloud Gmail Ảo - Nhận OTP Thật</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -78,7 +79,7 @@ BASE_HTML = """
 </head>
 <body id="bodyTag" class="theme-rgb">
     <header>
-        <a href="/" class="logo">⚡ GMAIL ẢO VIP & 10 PHÚT</a>
+        <a href="/" class="logo">⚡ CLOUD GMAIL & OTP THẬT</a>
         <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <select id="themeSelect" onchange="changeTheme(this.value)" style="width: auto; padding: 6px 10px; background: #181a25; color: white; border-radius: 6px; margin: 0;">
                 <option value="theme-rgb">🌈 RGB 7 Màu</option>
@@ -129,82 +130,124 @@ BASE_HTML = """
 </html>
 """
 
+def fetch_cloud_messages(email_addr):
+  try:
+    parts = email_addr.split('@')
+    if len(parts) != 2: return []
+    login, domain = parts[0], parts[1]
+    url = f"https://www.1secmail.com/api/1v1/?action=getMessages&login={login}&domain={domain}"
+    res = requests.get(url, timeout=5)
+    if res.status_code == 200:
+      msgs = res.json()
+      formatted_msgs = []
+      for m in msgs:
+        # Lấy nội dung chi tiết từng thư
+        msg_id = m.get('id')
+        detail_url = f"https://www.1secmail.com/api/1v1/?action=readMessage&login={login}&domain={domain}&id={msg_id}"
+        detail_res = requests.get(detail_url, timeout=5)
+        body_text = "Không đọc được nội dung"
+        if detail_res.status_code == 200:
+          body_text = detail_res.json().get('textBody', detail_res.json().get('body', ''))
+        
+        formatted_msgs.append({
+            'sender': m.get('from'),
+            'subject': m.get('subject'),
+            'snippet': body_text[:150] + '...',
+            'time': m.get('date')
+        })
+      return formatted_msgs
+  except Exception as e:
+    print(f"Lỗi lấy thư cloud: {e}")
+  return []
+
 @app.route('/')
 def index():
-  # Tự động dọn dẹp các email 10 phút đã hết hạn
-  now_ts = datetime.now().timestamp()
-  global inboxes_db
-  inboxes_db = [box for box in inboxes_db if box['is_permanent'] or (now_ts - box['created_at'] < 600)]
-
   user_info = None
   my_emails = []
   if 'username' in session:
     uname = session['username']
     user_info = users_db.get(uname)
-    my_emails = [b for b in inboxes_db if b['owner'] == uname or user_info['role'] == 'admin']
+    my_emails = [b for b in cloud_inboxes if b['owner'] == uname or user_info['role'] == 'admin']
   else:
-    # Khách vãng lai: dùng email 10 phút lưu trong session
     if 'guest_email' not in session:
-      rand_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-      g_email = f"guest_{rand_str}@gagaming.store"
+      # Lấy mail thật ngẫu nhiên từ cloud 1secmail
+      try:
+        res = requests.get("https://www.1secmail.com/api/1v1/?action=genRandomMailbox&count=1", timeout=5)
+        if res.status_code == 200 and res.json():
+          g_email = res.json()[0]
+        else:
+          rand_str = ''.join(random.choices(string.ascii_lowercase, k=8))
+          g_email = f"{rand_str}@1secmail.com"
+      except:
+        g_email = f"guest_test@1secmail.com"
+      
       session['guest_email'] = g_email
-      inboxes_db.append({
+      cloud_inboxes.append({
           'email': g_email,
           'owner': 'guest',
           'is_permanent': False,
-          'created_at': now_ts,
-          'messages': [
-              {
-                  'sender': 'system@gagaming.store',
-                  'subject': 'Hộp thư tạm thời 10 phút',
-                  'snippet': 'Hộp thư này sẽ tự hủy sau 10 phút. Hãy nâng cấp tài khoản để dùng vĩnh viễn!',
-                  'time': datetime.now().strftime('%H:%M:%S')
-              }
-          ]
+          'created_at': datetime.now().timestamp()
       })
+    
     g_email = session['guest_email']
-    my_emails = [b for b in inboxes_db if b['email'] == g_email]
+    my_emails = [b for b in cloud_inboxes if b['email'] == g_email]
 
   emails_render = ''
   for box in my_emails:
-    remaining_time = "Vĩnh viễn (VIP/Admin)" if box['is_permanent'] else f"{max(0, int(10 - (now_ts - box['created_at']) / 60))} phút"
+    # Lấy tin nhắn thực tế từ cloud api
+    live_messages = fetch_cloud_messages(box['email'])
+    
+    remaining_time = "Vĩnh viễn (VIP/Admin)" if box['is_permanent'] else "10 phút (Khách)"
     status_color = "var(--success)" if box['is_permanent'] else "var(--accent)"
     
     msgs_html = ''
-    for m in box['messages']:
-      msgs_html += f'<div style="background: #12131c; padding: 10px; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border-color); font-size: 13px;"><p style="margin: 0 0 4px 0; color: var(--accent);"><b>Từ:</b> {m["sender"]} <span style="float: right; color: var(--text-secondary);">{m["time"]}</span></p><p style="margin: 0 0 4px 0; color: white;"><b>Tiêu đề:</b> {m["subject"]}</p><p style="margin: 0; color: var(--text-secondary);">{m["snippet"]}</p></div>'
+    if not live_messages:
+      msgs_html = '<p style="color: var(--text-secondary); font-size: 13px; margin: 5px 0;">Đang chờ tin nhắn / mã OTP từ bên ngoài gửi đến...</p>'
+    else:
+      for m in live_messages:
+        msgs_html += f'<div style="background: #12131c; padding: 10px; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border-color); font-size: 13px;"><p style="margin: 0 0 4px 0; color: var(--accent);"><b>Từ:</b> {m["sender"]} <span style="float: right; color: var(--text-secondary);">{m["time"]}</span></p><p style="margin: 0 0 4px 0; color: white;"><b>Tiêu đề:</b> {m["subject"]}</p><p style="margin: 0; color: var(--text-secondary);"><b>Nội dung:</b> {m["snippet"]}</p></div>'
 
-    emails_render += f'<div class="card rgb-box"><div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;"><div><h3 style="margin: 0; color: var(--success);">📧 {box["email"]}</h3><small style="color: {status_color};">Thời gian sống: <b>{remaining_time}</b> | Chủ sở hữu: {box["owner"]}</small></div><button onclick="navigator.clipboard.writeText(\'{box["email"]}\'); alert(\'Đã copy email!\');" class="btn rgb-btn" style="padding: 6px 12px; font-size: 12px;">📋 Copy</button></div><div style="margin-top: 12px;">{msgs_html}</div></div>'
+    emails_render += f'<div class="card rgb-box"><div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;"><div><h3 style="margin: 0; color: var(--success);">📧 {box["email"]}</h3><small style="color: {status_color};">Loại: <b>{remaining_time}</b> | Chủ sở hữu: {box["owner"]}</small></div><div style="display: flex; gap: 8px;"><button onclick="location.reload();" class="btn" style="background: #1e293b; color: var(--success); padding: 6px 12px; font-size: 12px; border: 1px solid var(--success);">🔄 Làm Mới</button><button onclick="navigator.clipboard.writeText(\'{box["email"]}\'); alert(\'Đã copy email!\');" class="btn rgb-btn" style="padding: 6px 12px; font-size: 12px;">📋 Copy</button></div></div><div style="margin-top: 12px;">{msgs_html}</div></div>'
 
   create_section = ''
   if 'username' in session and (user_info['is_vip'] or user_info['role'] == 'admin'):
+    # Lấy danh sách domain thật từ 1secmail để user tạo tùy chỉnh
+    try:
+      domains_res = requests.get("https://www.1secmail.com/api/1v1/?action=getDomainList", timeout=5)
+      domains = domains_res.json() if domains_res.status_code == 200 else ['1secmail.com', '1secmail.org', 'wwjmp.com']
+    except:
+      domains = ['1secmail.com', '1secmail.org']
+    
+    domain_options = ''.join([f'<option value="{d}">@{d}</option>' for d in domains])
+
     create_section = f'''
         <div class="card rgb-box">
-            <h3 style="margin-top:0; color: var(--primary);">👑 Tạo Gmail Ảo Vĩnh Viễn Tùy Chỉnh</h3>
+            <h3 style="margin-top:0; color: var(--primary);">👑 Tạo Cloud Gmail Vĩnh Viễn Tùy Chỉnh</h3>
             <form action="/tao-email-vinh-vien" method="POST">
                 <label style="font-size: 13px; color: var(--text-secondary);">Nhập tên email muốn tạo:</label>
-                <div style="display: flex; align-items: center; gap: 10px;">
-                    <input type="text" name="custom_name" placeholder="VD: myname, shopacc..." required>
-                    <span style="font-weight: bold; color: var(--text-secondary);">@gagaming.store</span>
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" name="custom_name" placeholder="VD: shopacc, myname..." required style="flex: 2; min-width: 150px;">
+                    <select name="custom_domain" style="flex: 1; min-width: 130px; margin: 0;">
+                        {domain_options}
+                    </select>
                 </div>
-                <button type="submit" class="btn rgb-btn" style="margin-top: 10px;">TẠO GMAIL VĨNH VIỄN</button>
+                <button type="submit" class="btn rgb-btn" style="margin-top: 12px;">TẠO CLOUD GMAIL VĨNH VIỄN</button>
             </form>
         </div>
         '''
   elif 'username' in session:
-    create_section = '<div class="card rgb-box" style="text-align: center;"><p style="margin:0;">Bạn đang dùng tài khoản Thường. Muốn tạo Gmail vĩnh viễn và tùy chỉnh tên, hãy <a href="/upgrade-vip" style="color: var(--accent); font-weight: bold;">Nâng cấp VIP (20k/tháng)</a> hoặc đăng nhập tài khoản <b>admin</b>!</p></div>'
+    create_section = '<div class="card rgb-box" style="text-align: center;"><p style="margin:0;">Bạn đang dùng tài khoản Thường. Muốn tạo Gmail vĩnh viễn và tùy chỉnh tên, hãy <a href="/upgrade-vip" style="color: var(--accent); font-weight: bold;">Nâng cấp VIP (20k/tháng)</a>!</p></div>'
   else:
     create_section = '<div class="card rgb-box" style="text-align: center;"><p style="margin:0;">Bạn đang dùng hộp thư <b>10 phút miễn phí</b>. <a href="/login" style="color: var(--primary); font-weight: bold;">Đăng nhập</a> để mở khóa tính năng VIP vĩnh viễn!</p></div>'
 
   content = f'''
     <div style="text-align: center; margin-bottom: 25px;">
-        <h2 class="rgb-text" style="margin-bottom: 5px;">HỆ THỐNG GMAIL ẢO THÔNG MINH</h2>
-        <p style="color: var(--text-secondary); font-size: 13px;">Miễn phí 10 phút cho khách | Vĩnh viễn cho VIP & Admin</p>
+        <h2 class="rgb-text" style="margin-bottom: 5px;">HỆ THỐNG CLOUD GMAIL THÔNG MINH</h2>
+        <p style="color: var(--text-secondary); font-size: 13px;">Nhận mã OTP thực tế từ các trang web bên ngoài!</p>
     </div>
     {create_section}
-    <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 10px 0;">
-        <h3 style="margin: 0;">📥 Hộp Thư Của Bạn</h3>
-        <button onclick="location.reload();" class="btn" style="background: #1e293b; color: var(--success); padding: 6px 12px; font-size: 12px; border: 1px solid var(--success);">🔄 Làm Mới</button>
+    <div style="margin: 20px 0 10px 0;">
+        <h3 style="margin: 0;">📥 Hộp Thư Đang Hoạt Động</h3>
     </div>
     {emails_render}
     '''
@@ -212,69 +255,55 @@ def index():
 
 
 @app.route('/tao-email-vinh-vien', methods=['POST'])
-def tao_email_vinh_vien():
-  if 'username' not in session:
-    return redirect(url_for('login'))
-  
+def tao_email_vinh-vien():
+  if 'username' not in session: return redirect(url_for('login'))
   uname = session['username']
   user = users_db[uname]
   
-  # Admin hoặc VIP mới được tạo
   if not user['is_vip'] and user['role'] != 'admin':
-    flash('Bạn cần lên VIP để tạo Gmail vĩnh viễn!')
+    flash('Bạn cần lên VIP để tạo Cloud Gmail vĩnh viễn!')
     return redirect(url_for('index'))
 
   custom_name = request.form.get('custom_name', '').strip().lower()
+  custom_domain = request.form.get('custom_domain', '1secmail.com').strip()
   clean_name = "".join([c for c in custom_name if c.isalnum() or c in '_-'])
+  
   if not clean_name:
     flash('Tên email không hợp lệ!')
     return redirect(url_for('index'))
 
-  email_addr = f"{clean_name}@gagaming.store"
+  email_addr = f"{clean_name}@{custom_domain}"
   
-  # Check trùng
-  exists = next((b for b in inboxes_db if b['email'] == email_addr), None)
+  exists = next((b for b in cloud_inboxes if b['email'] == email_addr), None)
   if exists:
-    flash('Địa chỉ email này đã tồn tại!')
+    flash('Địa chỉ email này đã tồn tại trên hệ thống cloud!')
   else:
-    inboxes_db.append({
+    cloud_inboxes.append({
         'email': email_addr,
         'owner': uname,
         'is_permanent': True,
-        'created_at': datetime.now().timestamp(),
-        'messages': [
-            {
-                'sender': 'system@gagaming.store',
-                'subject': 'Tạo hộp thư vĩnh viễn thành công',
-                'snippet': 'Hộp thư này thuộc sở hữu vĩnh viễn của bạn và không bao giờ bị xóa.',
-                'time': datetime.now().strftime('%H:%M %d/%m/%Y')
-            }
-        ]
+        'created_at': datetime.now().timestamp()
     })
-    flash(f'Tạo thành công email vĩnh viễn: {email_addr}')
+    flash(f'Tạo thành công Cloud Gmail: {email_addr}')
 
   return redirect(url_for('index'))
 
 
 @app.route('/upgrade-vip')
 def upgrade_vip():
-  if 'username' not in session:
-    return redirect(url_for('login'))
+  if 'username' not in session: return redirect(url_for('login'))
   uname = session['username']
   user = users_db[uname]
-
   if user['is_vip']:
-    flash('Bạn đã là VIP từ trước rồi!')
+    flash('Bạn đã là VIP rồi!')
     return redirect(url_for('index'))
-
   if user['balance'] < 20000:
     flash('Số dư không đủ 20.000đ để nâng cấp VIP!')
     return redirect(url_for('index'))
 
   user['balance'] -= 20000
   user['is_vip'] = True
-  user['vip_expiry'] = datetime.now().timestamp() + (30 * 86400)
-  flash('🎉 Nâng cấp VIP thành công! Bạn đã có quyền tạo Gmail vĩnh viễn.')
+  flash('🎉 Nâng cấp VIP thành công! Bạn được quyền tạo Cloud Gmail vĩnh viễn.')
   return redirect(url_for('index'))
 
 
@@ -301,7 +330,7 @@ def register():
     elif u in users_db: flash('Tài khoản đã tồn tại!')
     else:
       users_db[u] = {'password': p, 'role': 'user', 'balance': 50000, 'is_vip': False, 'vip_expiry': 0}
-      flash('Đăng ký thành công! Đã tặng sẵn 50k trong tài khoản test.')
+      flash('Đăng ký thành công! Đã tặng sẵn 50k test.')
       return redirect(url_for('login'))
   content = '<div class="card rgb-box" style="max-width: 400px; margin: auto;"><h2 class="rgb-text" style="text-align: center;">ĐĂNG KÝ</h2><form method="POST"><input type="text" name="username" placeholder="Tài khoản mới..." required><input type="password" name="password" placeholder="Mật khẩu..." required><button type="submit" class="btn rgb-btn" style="margin-top: 15px;">ĐĂNG KÝ</button></form><div style="text-align: center; margin-top: 15px;"><a href="/" style="color: var(--text-secondary); font-size: 13px; text-decoration: none;">← Quay về</a></div></div>'
   return render_template_string(BASE_HTML, content=content, users_db=users_db)
@@ -316,22 +345,19 @@ def logout():
 @app.route('/admin')
 def admin():
   if 'username' not in session or users_db[session['username']]['role'] != 'admin':
-    flash('Bạn không có quyền truy cập trang quản trị!')
+    flash('Không có quyền truy cập!')
     return redirect(url_for('index'))
 
   emails_table = ''
-  for b in inboxes_db:
-    emails_table += f'<div style="background: #12131c; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; border: 1px solid var(--border-color);"><p style="margin:0 0 4px 0;"><b>Email:</b> <span style="color: var(--success);">{b["email"]}</span> | <b>Chủ sở hữu:</b> {b["owner"]}</p><p style="margin:0;"><b>Loại:</b> {"Vĩnh viễn" if b["is_permanent"] else "10 phút"} | <b>Số tin nhắn:</b> {len(b["messages"])}</p></div>'
+  for b in cloud_inboxes:
+    emails_table += f'<div style="background: #12131c; padding: 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; border: 1px solid var(--border-color);"><p style="margin:0;"><b>Email:</b> <span style="color: var(--success);">{b["email"]}</span> | <b>Chủ sở hữu:</b> {b["owner"]} | <b>Loại:</b> {"Vĩnh viễn" if b["is_permanent"] else "10 phút"}</p></div>'
 
   content = f'''
     <div class="card rgb-box" style="border: 1px solid var(--primary);">
         <h2 class="rgb-text" style="margin-top:0;">⚙️ TRANG QUẢN TRỊ ADMIN</h2>
-        <p style="color: var(--text-secondary);">Tài khoản Admin có toàn quyền xem tất cả hộp thư vĩnh viễn và 10 phút của toàn hệ thống.</p>
-        <h3 style="color: var(--accent);">Danh Sách Hộp Thư Đang Hoạt Động ({len(inboxes_db)})</h3>
+        <h3 style="color: var(--accent);">Tất Cả Cloud Email Đang Hoạt Động ({len(cloud_inboxes)})</h3>
         {emails_table if emails_table else "<p>Chưa có hộp thư nào.</p>"}
-        <div style="margin-top: 20px;">
-            <a href="/" class="btn rgb-btn">← Quay về trang chủ</a>
-        </div>
+        <div style="margin-top: 20px;"><a href="/" class="btn rgb-btn">← Quay về trang chủ</a></div>
     </div>
     '''
   return render_template_string(BASE_HTML, content=content, users_db=users_db)
