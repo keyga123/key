@@ -4,30 +4,49 @@ import base64
 import urllib.parse
 
 app = Flask(__name__)
-app.secret_key = 'ga_gaming_toolkit_secret_key_v9999'
+app.secret_key = 'ga_gaming_toolkit_secret_key_v9999_pro'
 
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# --- HỆ THỐNG MÃ HÓA LUA V9999 PRO ---
+# --- HỆ THỐNG MÃ HÓA LUA V9999 CHO ROBLOX EXPLOIT ---
 def lua_v9999_obfuscator(lua_code):
     try:
-        # Mã hóa byte string chuẩn chống decompile cho Lua
-        encoded_bytes = lua_code.encode('utf-8')
-        char_list = ",".join([str(b) for b in encoded_bytes])
+        # Mã hóa base64 chuẩn cho Roblox executor
+        b64_encoded = base64.b64encode(lua_code.encode('utf-8')).decode('utf-8')
         
         obfuscated_script = f"""--[[
     ========================================
-       GA GAMING - LUA V9999 OBFUSCATOR PRO
-       Protected by Advanced String Encoder
+       GA GAMING - LUA V9999 EXPLOIT PRO
+       Protected & Optimized for Roblox
     ========================================
 --]]
-local _s = string.char({char_list})
-local _f, _e = load(_s)
+local _b64 = "{b64_encoded}"
+local function _d(data)
+    local b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+    data = string.gsub(data, '[^'..b..'=]', '')
+    return (data:gsub('.', function(x)
+        if (x == '=') then return '' end
+        local r,f='',(b:find(x)-1)
+        for i=6,1,-1 do r=r..(f%2^i-f%2^(i-1)>0 and '1' or '0') end
+        return r;
+    end):gsub('%d%d%d?%d?%d?%d?%d?%d?', function(x)
+        if (#x ~= 8) then return '' end
+        local c=0
+        for i=1,8 do c=c+(x:sub(i,i)=='1' and 2^(8-i) or 0) end
+        return string.char(c)
+    end))
+end
+
+local _s = _d(_b64)
+local _f = loadstring or load
 if _f then
-    return _f()
-else
-    error("GA GAMING Runtime Error: " .. tostring(_e))
+    local success, res = pcall(function()
+        return _f(_s)()
+    end)
+    if not success then
+        warn("GA GAMING Error: " .. tostring(res))
+    end
 end
 """
         return obfuscated_script
@@ -140,14 +159,11 @@ def obfuscate_lua():
         file_path = os.path.join(UPLOAD_FOLDER, file.filename)
         file.save(file_path)
         
-        # Đọc nội dung file Lua gốc
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
             
-        # Tiến hành mã hóa bằng Lua V9999 Pro
         obfuscated_content = lua_v9999_obfuscator(content)
         
-        # Lưu file kết quả
         out_filename = f"obfuscated_{file.filename}"
         out_path = os.path.join(UPLOAD_FOLDER, out_filename)
         with open(out_path, 'w', encoding='utf-8') as f:
@@ -184,4 +200,3 @@ def obfuscate_py():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
-    
