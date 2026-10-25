@@ -5,9 +5,8 @@ import random
 import string
 
 app = Flask(__name__)
-app.secret_key = 'cloud_gmail_api_secret_v2'
+app.secret_key = 'cloud_gmail_api_secret_v3'
 
-# --- DATABASE TÀI KHOẢN ---
 users_db = {
     'admin': {
         'password': '123',
@@ -25,7 +24,6 @@ users_db = {
     }
 }
 
-# Lưu danh sách email thực tế do user tạo (liên kết với Cloud 1SecMail)
 cloud_inboxes = []
 
 BASE_HTML = """
@@ -48,7 +46,6 @@ BASE_HTML = """
             --text-main: #ffffff;
             --text-secondary: #a4b0be;
         }
-
         body.theme-red { --primary: #ff4757; --primary-hover: #ff6b81; --accent: #ffa502; }
         body.theme-green { --primary: #2ed573; --primary-hover: #26af5f; --accent: #00d2d3; }
         body.theme-blue { --primary: #1e90ff; --primary-hover: #3742fa; --accent: #ff6b81; }
@@ -59,7 +56,6 @@ BASE_HTML = """
             50% { border-color: #00ff00; box-shadow: 0 0 10px rgba(0,255,0,0.4); }
             100% { border-color: #0000ff; box-shadow: 0 0 10px rgba(0,0,255,0.4); }
         }
-
         body.theme-rgb .rgb-box { border: 2px solid #ff0000 !important; animation: rgb-border 6s infinite; }
         body.theme-rgb .rgb-btn { background: linear-gradient(45deg, #ff0000, #ff7300, #48ff00, #00ffd5, #002bff, #ff00c8) !important; color: white !important; }
         body:not(.theme-rgb) .rgb-box { border: 2px solid var(--primary) !important; }
@@ -74,7 +70,6 @@ BASE_HTML = """
         .btn { border: none; padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; text-align: center; display: inline-block; text-decoration: none; transition: 0.2s; }
         input, select { width: 100%; padding: 12px; margin: 10px 0; background: #12131c; border: 1px solid var(--border-color); color: white; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
         .alert { background: rgba(255,71,87,0.15); border: 1px solid var(--primary); color: #ff6b81; padding: 12px; border-radius: 8px; margin-bottom: 15px; text-align: center; font-weight: 500; }
-        .email-box { background: #12131c; border: 2px dashed var(--primary); padding: 15px; border-radius: 8px; text-align: center; font-size: 18px; font-weight: bold; color: var(--success); margin: 15px 0; word-break: break-all; }
     </style>
 </head>
 <body id="bodyTag" class="theme-rgb">
@@ -141,7 +136,6 @@ def fetch_cloud_messages(email_addr):
       msgs = res.json()
       formatted_msgs = []
       for m in msgs:
-        # Lấy nội dung chi tiết từng thư
         msg_id = m.get('id')
         detail_url = f"https://www.1secmail.com/api/1v1/?action=readMessage&login={login}&domain={domain}&id={msg_id}"
         detail_res = requests.get(detail_url, timeout=5)
@@ -170,7 +164,6 @@ def index():
     my_emails = [b for b in cloud_inboxes if b['owner'] == uname or user_info['role'] == 'admin']
   else:
     if 'guest_email' not in session:
-      # Lấy mail thật ngẫu nhiên từ cloud 1secmail
       try:
         res = requests.get("https://www.1secmail.com/api/1v1/?action=genRandomMailbox&count=1", timeout=5)
         if res.status_code == 200 and res.json():
@@ -194,9 +187,7 @@ def index():
 
   emails_render = ''
   for box in my_emails:
-    # Lấy tin nhắn thực tế từ cloud api
     live_messages = fetch_cloud_messages(box['email'])
-    
     remaining_time = "Vĩnh viễn (VIP/Admin)" if box['is_permanent'] else "10 phút (Khách)"
     status_color = "var(--success)" if box['is_permanent'] else "var(--accent)"
     
@@ -211,7 +202,6 @@ def index():
 
   create_section = ''
   if 'username' in session and (user_info['is_vip'] or user_info['role'] == 'admin'):
-    # Lấy danh sách domain thật từ 1secmail để user tạo tùy chỉnh
     try:
       domains_res = requests.get("https://www.1secmail.com/api/1v1/?action=getDomainList", timeout=5)
       domains = domains_res.json() if domains_res.status_code == 200 else ['1secmail.com', '1secmail.org', 'wwjmp.com']
@@ -223,7 +213,7 @@ def index():
     create_section = f'''
         <div class="card rgb-box">
             <h3 style="margin-top:0; color: var(--primary);">👑 Tạo Cloud Gmail Vĩnh Viễn Tùy Chỉnh</h3>
-            <form action="/tao-email-vinh-vien" method="POST">
+            <form action="/tao_email_vinh_vien" method="POST">
                 <label style="font-size: 13px; color: var(--text-secondary);">Nhập tên email muốn tạo:</label>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <input type="text" name="custom_name" placeholder="VD: shopacc, myname..." required style="flex: 2; min-width: 150px;">
@@ -254,8 +244,8 @@ def index():
   return render_template_string(BASE_HTML, content=content, users_db=users_db)
 
 
-@app.route('/tao-email-vinh-vien', methods=['POST'])
-def tao_email_vinh-vien():
+@app.route('/tao_email_vinh_vien', methods=['POST'])
+def tao_email_vinh_vien():
   if 'username' not in session: return redirect(url_for('login'))
   uname = session['username']
   user = users_db[uname]
